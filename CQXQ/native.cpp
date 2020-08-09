@@ -31,7 +31,7 @@ ctpl::thread_pool p(4);
 		return p.push([&args...](int iThread){ return _##Name(std::forward<Args>(args)...); }).get(); \
 	}
 
-XQAPI(XQ_sendMsg, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId)
+XQAPI(XQ_sendMsgEx, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon)
 
 XQAPI(XQ_outputLog, void, const char* content)
 
@@ -258,7 +258,7 @@ CQAPI(const char*, OQ_Create, 0)()
 	XQHModule = LoadLibraryA("OQapi.dll");
 #endif
 	_XQ_outputLog = (XQ_outputLog_TYPE)GetProcAddress(XQHModule, "Api_OutPutLog");
-	_XQ_sendMsg = (XQ_sendMsg_TYPE)GetProcAddress(XQHModule, "Api_SendMsg");
+	_XQ_sendMsgEx = (XQ_sendMsgEx_TYPE)GetProcAddress(XQHModule, "Api_SendMsgEx");
 	_XQ_getNick = (XQ_getNick_TYPE)GetProcAddress(XQHModule, "Api_GetNick");
 	//_XQ_getGender = (XQ_getGender_TYPE)GetProcAddress(XQHModule, "Api_GetGender");
 	//_XQ_getAge = (XQ_getAge_TYPE)GetProcAddress(XQHModule, "Api_GetAge");
@@ -711,11 +711,11 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 	
 	if (XQ_ifFriend(robotQQ.c_str(), accStr.c_str()))
 	{
-		XQ_sendMsg(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
+		XQ_sendMsgEx(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0, FALSE);
 	}
 	else if (UserGroupCache.count(accStr))
 	{
-		XQ_sendMsg(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
+		XQ_sendMsgEx(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0, FALSE);
 	}
 	else
 	{
@@ -729,7 +729,7 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 {
 	if (robotQQ.empty()) return 1;
 	std::string grpStr = std::to_string(group);
-	XQ_sendMsg(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0);
+	XQ_sendMsgEx(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0, FALSE);
 	return 0;
 }
 
