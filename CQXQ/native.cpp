@@ -5,6 +5,7 @@
 #include <future>
 #include <filesystem>
 #include <fstream>
+#include <set>
 #include "GlobalVar.h"
 #include "native.h"
 #include "CQTools.h"
@@ -31,7 +32,7 @@ ctpl::thread_pool p(4);
 		return p.push([&args...](int iThread){ return _##Name(std::forward<Args>(args)...); }).get(); \
 	}
 
-XQAPI(XQ_sendMsgEx, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon)
+XQAPI(XQ_sendMsg, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId)
 
 XQAPI(XQ_outputLog, void, const char* content)
 
@@ -258,7 +259,7 @@ CQAPI(const char*, OQ_Create, 0)()
 	XQHModule = LoadLibraryA("OQapi.dll");
 #endif
 	_XQ_outputLog = (XQ_outputLog_TYPE)GetProcAddress(XQHModule, "Api_OutPutLog");
-	_XQ_sendMsgEx = (XQ_sendMsgEx_TYPE)GetProcAddress(XQHModule, "Api_SendMsgEx");
+	_XQ_sendMsg = (XQ_sendMsg_TYPE)GetProcAddress(XQHModule, "Api_SendMsg");
 	_XQ_getNick = (XQ_getNick_TYPE)GetProcAddress(XQHModule, "Api_GetNick");
 	//_XQ_getGender = (XQ_getGender_TYPE)GetProcAddress(XQHModule, "Api_GetGender");
 	//_XQ_getAge = (XQ_getAge_TYPE)GetProcAddress(XQHModule, "Api_GetAge");
@@ -300,9 +301,9 @@ CQAPI(const char*, OQ_Create, 0)()
 	}
 	
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.0\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.1\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.0}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.0.1}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
@@ -711,11 +712,11 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 	
 	if (XQ_ifFriend(robotQQ.c_str(), accStr.c_str()))
 	{
-		XQ_sendMsgEx(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0, FALSE);
+		XQ_sendMsg(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
 	}
 	else if (UserGroupCache.count(accStr))
 	{
-		XQ_sendMsgEx(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0, FALSE);
+		XQ_sendMsg(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
 	}
 	else
 	{
@@ -729,7 +730,7 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 {
 	if (robotQQ.empty()) return 1;
 	std::string grpStr = std::to_string(group);
-	XQ_sendMsgEx(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0, FALSE);
+	XQ_sendMsg(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0);
 	return 0;
 }
 
@@ -849,6 +850,41 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL cache)
 {
 	static std::string ret;
+	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+	std::string memberListStr = memberList ? memberList : "";
+	if (memberListStr.empty()) return "";
+	try
+	{
+		nlohmann::json j = nlohmann::json::parse(memberListStr);
+		std::string groupStr = std::to_string(group);
+		const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
+		std::string groupNameStr = groupName ? groupName : "";
+		int currentNum = j["mem_num"].get<int>();
+		int maxNum = j["max_num"].get<int>();
+		int friendNum = 0;
+		for (const auto& member : j["members"].items())
+		{
+			if (member.value().count("fr") && member.value()["fr"].get<int>() == 1)
+			{
+				friendNum += 1;
+			}
+		}
+		Unpack p;
+		p.add(group);
+		p.add(groupNameStr);
+		p.add(currentNum);
+		p.add(maxNum);
+		p.add(friendNum);
+		ret = base64_encode(p.getAll());
+		return ret.c_str();
+	}
+	catch (std::exception&)
+	{
+		return "";
+	}
+	return "";
+	/*
+	static std::string ret;
 	std::string groupStr = std::to_string(group);
 	const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
 	std::string groupNameStr = groupName ? groupName : "";
@@ -872,10 +908,57 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL c
 	p.add(0); // 暂不支持获取群内好友人数
 	ret = base64_encode(p.getAll());
 	return ret.c_str();
+	*/
 }
 
 CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 {
+	static std::string ret;
+
+	const char* groupList = XQ_getGroupList(robotQQ.c_str());
+	std::string groupListStr = groupList ? groupList : "";
+	if (groupListStr.empty()) return "";
+	try
+	{
+		Unpack p;
+		std::vector<Unpack> Groups;
+		nlohmann::json j = nlohmann::json::parse(groupListStr);
+		for (const auto& group : j["create"])
+		{
+			Unpack t;
+			t.add(group["gc"].get<long long>());
+			t.add(UTF8toGBK(group["gn"].get<std::string>()));
+			Groups.push_back(t);
+		}
+		for (const auto& group : j["join"])
+		{
+			Unpack t;
+			t.add(group["gc"].get<long long>());
+			t.add(UTF8toGBK(group["gn"].get<std::string>()));
+			Groups.push_back(t);
+		}
+		for (const auto& group : j["manage"])
+		{
+			Unpack t;
+			t.add(group["gc"].get<long long>());
+			t.add(UTF8toGBK(group["gn"].get<std::string>()));
+			Groups.push_back(t);
+		}
+		p.add(static_cast<int>(Groups.size()));
+		for (auto& group : Groups)
+		{
+			p.add(group);
+		}
+		ret = base64_encode(p.getAll());
+		return ret.c_str();
+	}
+	catch (std::exception&)
+	{
+		return "";
+	}
+	return "";
+
+	/*
 	static std::string ret;
 	const char* group = XQ_getGroupList_B(robotQQ.c_str());
 	if (!group) return "";
@@ -907,10 +990,52 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 	}
 	ret = base64_encode(p.getAll());
 	return ret.c_str();
+	*/
 }
 
 CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL cache)
 {
+	static std::string ret;
+	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+	std::string memberListStr = memberList ? memberList : "";
+	if (memberListStr.empty()) return "";
+	try
+	{
+		nlohmann::json j = nlohmann::json::parse(memberListStr);
+		long long owner = j["owner"].get<long long>();
+		std::set<long long> admin = j["adm"].get<std::set<long long>>();
+		std::map<std::string, std::string> lvlName = j["levelname"].get<std::map<std::string, std::string>>();
+		for (auto& item : lvlName)
+		{
+			lvlName[item.first] = UTF8toGBK(item.second);
+		}
+		if (!j["members"].count(std::to_string(account))) return "";
+		Unpack t;
+		t.add(group);
+		t.add(account);
+		t.add(j["members"].count("nk") ? UTF8toGBK(j["members"]["nk"].get<std::string>()) : "");
+		t.add(j["members"].count("cd") ? UTF8toGBK(j["members"]["cd"].get<std::string>()) : "");
+		t.add(255);
+		t.add(-1);
+		t.add("");
+		t.add(j["members"].count("jt") ? j["members"]["jt"].get<int>() : 0);
+		t.add(j["members"].count("lst") ? j["members"]["lst"].get<int>() : 0);
+		t.add(j["members"].count("ll") ? (lvlName.count("lvln" + std::to_string(j["members"]["ll"].get<int>())) ? lvlName["lvln" + std::to_string(j["members"]["ll"].get<int>())] : "") : "");
+		t.add(account == owner ? 3 : (admin.count(account) ? 2 : 1));
+		t.add("");
+		t.add(-1);
+		t.add(FALSE);
+		t.add(TRUE);
+		ret = base64_encode(t.getAll());
+		return ret.c_str();
+	}
+	catch (std::exception&)
+	{
+		return "";
+	}
+	return "";
+	
+	/*
 	static std::string ret;
 	std::string grpStr = std::to_string(group);
 	std::string accStr = std::to_string(account);
@@ -921,12 +1046,6 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 	p.add(nick ? nick : "");
 	const char* groupCard = XQ_getGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
 	p.add(groupCard ? groupCard : "");
-	/*
-	int gender = XQ_getGender(robotQQ.c_str(), accStr.c_str());
-	if (gender == -1) p.add(255);
-	else p.add(gender - 1);
-	p.add(XQ_getAge(robotQQ.c_str(), accStr.c_str()));
-	*/
 	p.add(255);
 	p.add(-1);
 	p.add("");
@@ -956,14 +1075,59 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 	p.add("");
 	p.add(0);
 	p.add(FALSE);
-	p.add(FALSE);
+	p.add(TRUE);
 	ret = base64_encode(p.getAll());
+	*/
 	return ret.c_str();
 }
 
 CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了未实现的API CQ_getGroupMemberList").c_str());
+	static std::string ret;
+	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+	std::string memberListStr = memberList ? memberList : "";
+	if (memberListStr.empty()) return "";
+	try
+	{
+		Unpack p;
+		nlohmann::json j = nlohmann::json::parse(memberListStr);
+		long long owner = j["owner"].get<long long>();
+		std::set<long long> admin = j["adm"].get<std::set<long long>>();
+		int mem_num = j["mem_num"].get<int>();
+		std::map<std::string, std::string> lvlName = j["levelname"].get<std::map<std::string, std::string>>();
+		for (auto& item : lvlName)
+		{
+			lvlName[item.first] = UTF8toGBK(item.second);
+		}
+		p.add(mem_num);
+		for (const auto& member : j["members"].items())
+		{
+			long long qq = std::stoll(member.key());
+			Unpack t;
+			t.add(group);
+			t.add(qq);
+			t.add(member.value().count("nk") ? UTF8toGBK(member.value()["nk"].get<std::string>()) : "");
+			t.add(member.value().count("cd") ? UTF8toGBK(member.value()["cd"].get<std::string>()) : "");
+			t.add(255);
+			t.add(-1);
+			t.add("");
+			t.add(member.value().count("jt") ? member.value()["jt"].get<int>() : 0);
+			t.add(member.value().count("lst") ? member.value()["lst"].get<int>() : 0);
+			t.add(member.value().count("ll") ? (lvlName.count("lvln" + std::to_string(member.value()["ll"].get<int>())) ? lvlName["lvln" + std::to_string(member.value()["ll"].get<int>())]: "") : "");
+			t.add(qq == owner ? 3 : (admin.count(qq) ? 2 : 1));
+			t.add("");
+			t.add(-1);
+			t.add(FALSE);
+			t.add(TRUE);
+			p.add(t);
+		}
+		ret = base64_encode(p.getAll());
+		return ret.c_str();
+	}
+	catch (std::exception&)
+	{
+		return "";
+	}
 	return "";
 }
 
@@ -998,12 +1162,6 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	Unpack p;
 	p.add(account);
 	p.add(XQ_getNick(robotQQ.c_str(), accStr.c_str()));
-	/*
-	int gender = XQ_getGender(robotQQ.c_str(), accStr.c_str());
-	if (gender == -1) p.add(255);
-	else p.add(gender - 1);
-	p.add(XQ_getAge(robotQQ.c_str(), accStr.c_str()));
-	*/
 	p.add(255);
 	p.add(-1);
 	ret = base64_encode(p.getAll());
