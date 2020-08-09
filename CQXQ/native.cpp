@@ -114,8 +114,7 @@ int loadCQPlugin(const std::filesystem::path& file)
 	{
 		try
 		{
-			nlohmann::json j;
-			jsonstream >> j;
+			nlohmann::json j = nlohmann::json::parse(jsonstream, nullptr, true, true);
 			plugin.name = UTF8toGBK(j["name"].get<std::string>());
 			plugin.version = UTF8toGBK(j["version"].get<std::string>());
 			j["version_id"].get_to(plugin.version_id);
@@ -176,7 +175,7 @@ std::string parseToCQCode(const char* msg)
 	find_res = ret.find("[pic=");
 	while (find_res != string::npos)
 	{
-		ret.replace(find_res, 2, "[CQ:image,file=");
+		ret.replace(find_res, 5, "[CQ:image,file=");
 		find_res = ret.find("[pic=", find_res + 1);
 	}
 	return ret;
@@ -332,7 +331,15 @@ CQAPI(int32_t, XQ_SetUp, 0)()
 CQAPI(int32_t, OQ_SetUp, 0)()
 #endif
 {
-	GUIMain();
+	try
+	{
+		GUIMain();
+	}
+	catch (std::exception& e)
+	{
+		XQ_outputLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
+		MessageBoxA(nullptr, ("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str(), "CQXQ 错误", MB_OK);
+	}
 	return 0;
 }
 
@@ -346,336 +353,343 @@ CQAPI(int32_t, XQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 #endif
 {
-	std::string botQQStr = botQQ ? botQQ : "";
-	if (robotQQ.empty()) robotQQ = botQQStr;
-	if (!botQQStr.empty() && robotQQ != botQQStr) return 0;
-	if (msgType == XQ_Load)
-	{
-		for (const auto& plugin : plugins)
+	try {
+		std::string botQQStr = botQQ ? botQQ : "";
+		if (robotQQ.empty()) robotQQ = botQQStr;
+		if (!botQQStr.empty() && robotQQ != botQQStr) return 0;
+		if (msgType == XQ_Load)
 		{
-			if (!plugin.events.count(CQ_eventStartup)) continue;
-			const auto startup = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventStartup).c_str()));
-			if (startup)
+			for (const auto& plugin : plugins)
 			{
-				startup();
+				if (!plugin.events.count(CQ_eventStartup)) continue;
+				const auto startup = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventStartup).c_str()));
+				if (startup)
+				{
+					startup();
+				}
 			}
+			return 0;
 		}
-		return 0;
-	}
-	if (msgType == XQ_Enable)
-	{
-		const char* onlineList = XQ_getOnlineList();
-		std::string onlineListStr = onlineList ? onlineList : "";
+		if (msgType == XQ_Enable)
+		{
+			const char* onlineList = XQ_getOnlineList();
+			std::string onlineListStr = onlineList ? onlineList : "";
 
-		if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
+			if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
+			{
+				for (const auto& plugin : plugins)
+				{
+					if (!plugin.enabled) continue;
+					if (!plugin.events.count(CQ_eventEnable)) continue;
+					const auto enable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventEnable).c_str()));
+					if (enable)
+					{
+						enable();
+					}
+				}
+				EnabledEventCalled = true;
+			}
+			return 0;
+		}
+		if (msgType == XQ_LogInComplete)
+		{
+			if (!EnabledEventCalled && XQ_isEnable())
+			{
+				for (const auto& plugin : plugins)
+				{
+					if (!plugin.enabled) continue;
+					if (!plugin.events.count(CQ_eventEnable)) continue;
+					const auto enable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventEnable).c_str()));
+					if (enable)
+					{
+						enable();
+					}
+				}
+				EnabledEventCalled = true;
+			}
+			return 0;
+		}
+		if (msgType == XQ_Disable)
+		{
+			if (!EnabledEventCalled) return 0;
+			EnabledEventCalled = false;
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventDisable)) continue;
+				const auto disable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventDisable).c_str()));
+				if (disable)
+				{
+					disable();
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_FriendMsgEvent)
 		{
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventEnable)) continue;
-				const auto enable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventEnable).c_str()));
-				if (enable)
+				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
+				const auto privMsg = EvPriMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventPrivateMsg).c_str()));
+				if (privMsg)
 				{
-					enable();
+					privMsg(11, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
 				}
 			}
-			EnabledEventCalled = true;
+			return 0;
 		}
-		return 0;
-	}
-	if (msgType == XQ_LogInComplete)
-	{
-		if (!EnabledEventCalled && XQ_isEnable())
+		if (msgType == XQ_GroupTmpMsgEvent)
+		{
+			UserGroupCache[activeQQ] = sourceId;
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
+				const auto privMsg = EvPriMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventPrivateMsg).c_str()));
+				if (privMsg)
+				{
+					privMsg(2, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
+				}
+			}
+		}
+		if (msgType == XQ_GroupMsgEvent)
+		{
+			UserGroupCache[activeQQ] = sourceId;
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventGroupMsg)) continue;
+				const auto groupMsg = EvGroupMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventGroupMsg).c_str()));
+				if (groupMsg)
+				{
+					groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupInviteReqEvent)
 		{
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventEnable)) continue;
-				const auto enable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventEnable).c_str()));
-				if (enable)
+				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
+				const auto invited = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
+				if (invited)
 				{
-					enable();
+					Unpack p;
+					p.add(XQ_GroupInviteReqEvent);
+					p.add(sourceId);
+					p.add(activeQQ);
+					p.add(rawMsg);
+					invited(2, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
 				}
 			}
-			EnabledEventCalled = true;
+			return 0;
+		}
+		if (msgType == XQ_GroupAddReqEvent)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
+				const auto addReq = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
+				if (addReq)
+				{
+					Unpack p;
+					p.add(XQ_GroupAddReqEvent);
+					p.add(sourceId);
+					p.add(activeQQ);
+					p.add(rawMsg);
+					addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupInviteOtherReqEvent)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
+				const auto addReq = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
+				if (addReq)
+				{
+					Unpack p;
+					p.add(XQ_GroupInviteOtherReqEvent);
+					p.add(sourceId);
+					p.add(activeQQ);
+					p.add(rawMsg);
+					addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_FriendAddReqEvent)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventRequest_AddFriend)) continue;
+				const auto addReq = EvRequestAddFriend(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddFriend).c_str()));
+				if (addReq)
+				{
+					addReq(1, 0, atoll(activeQQ), msg, activeQQ);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupBanEvent)
+		{
+			// TODO: 禁言时间
+			XQ_outputLog(msg);
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
+				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				if (ban)
+				{
+					ban(2, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupUnbanEvent)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
+				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				if (ban)
+				{
+					ban(1, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupWholeBanEvent)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
+				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				if (ban)
+				{
+					ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupWholeUnbanEvent)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
+				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				if (ban)
+				{
+					ban(1, 0, atoll(sourceId), atoll(activeQQ), 0, 0);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupMemberIncreaseByApply)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
+				const auto MbrInc = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberIncrease).c_str()));
+				if (MbrInc)
+				{
+					MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupMemberIncreaseByInvite)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
+				const auto MbrInc = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberIncrease).c_str()));
+				if (MbrInc)
+				{
+					MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupMemberDecreaseByExit)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
+				const auto event = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberDecrease).c_str()));
+				if (event)
+				{
+					event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ));
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupMemberDecreaseByKick)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
+				const auto event = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberDecrease).c_str()));
+				if (event)
+				{
+					if (passiveQQ == robotQQ) event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+					else event(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupAdminSet)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
+				const auto event = EvGroupAdmin(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupAdmin).c_str()));
+				if (event)
+				{
+					event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_GroupAdminUnset)
+		{
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
+				const auto event = EvGroupAdmin(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupAdmin).c_str()));
+				if (event)
+				{
+					event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
+				}
+			}
+			return 0;
 		}
 		return 0;
 	}
-	if (msgType == XQ_Disable)
+	catch (std::exception& e)
 	{
-		if (!EnabledEventCalled) return 0;
-		EnabledEventCalled = false;
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventDisable)) continue;
-			const auto disable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventDisable).c_str()));
-			if (disable)
-			{
-				disable();
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_FriendMsgEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-			const auto privMsg = EvPriMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventPrivateMsg).c_str()));
-			if (privMsg)
-			{
-				privMsg(11, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupTmpMsgEvent)
-	{
-		UserGroupCache[activeQQ] = sourceId;
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-			const auto privMsg = EvPriMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventPrivateMsg).c_str()));
-			if (privMsg)
-			{
-				privMsg(2, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
-			}
-		}
-	}
-	if (msgType == XQ_GroupMsgEvent)
-	{
-		UserGroupCache[activeQQ] = sourceId;
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventGroupMsg)) continue;
-			const auto groupMsg = EvGroupMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventGroupMsg).c_str()));
-			if (groupMsg)
-			{
-				groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupInviteReqEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-			const auto invited = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
-			if (invited)
-			{
-				Unpack p;
-				p.add(XQ_GroupInviteReqEvent);
-				p.add(sourceId);
-				p.add(activeQQ);
-				p.add(rawMsg);
-				invited(2, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupAddReqEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-			const auto addReq = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
-			if (addReq)
-			{
-				Unpack p;
-				p.add(XQ_GroupAddReqEvent);
-				p.add(sourceId);
-				p.add(activeQQ);
-				p.add(rawMsg);
-				addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupInviteOtherReqEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-			const auto addReq = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
-			if (addReq)
-			{
-				Unpack p;
-				p.add(XQ_GroupInviteOtherReqEvent);
-				p.add(sourceId);
-				p.add(activeQQ);
-				p.add(rawMsg);
-				addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_FriendAddReqEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventRequest_AddFriend)) continue;
-			const auto addReq = EvRequestAddFriend(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddFriend).c_str()));
-			if (addReq)
-			{
-				addReq(1, 0, atoll(activeQQ), msg, activeQQ);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupBanEvent)
-	{
-		// TODO: 禁言时间
-		XQ_outputLog(msg);
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-			const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
-			if (ban)
-			{
-				ban(2, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupUnbanEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-			const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
-			if (ban)
-			{
-				ban(1, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupWholeBanEvent)
-	{	
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-			const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
-			if (ban)
-			{
-				ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupWholeUnbanEvent)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-			const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
-			if (ban)
-			{
-				ban(1, 0, atoll(sourceId), atoll(activeQQ), 0, 0);
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupMemberIncreaseByApply)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
-			const auto MbrInc = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberIncrease).c_str()));
-			if (MbrInc)
-			{
-				MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupMemberIncreaseByInvite)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
-			const auto MbrInc = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberIncrease).c_str()));
-			if (MbrInc)
-			{
-				MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupMemberDecreaseByExit)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
-			const auto event = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberDecrease).c_str()));
-			if (event)
-			{
-				event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ));
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupMemberDecreaseByKick)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
-			const auto event = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberDecrease).c_str()));
-			if (event)
-			{
-				if (passiveQQ == robotQQ) event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
-				else event(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupAdminSet)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
-			const auto event = EvGroupAdmin(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupAdmin).c_str()));
-			if (event)
-			{
-				event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupAdminUnset)
-	{
-		for (const auto& plugin : plugins)
-		{
-			if (!plugin.enabled) continue;
-			if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
-			const auto event = EvGroupAdmin(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupAdmin).c_str()));
-			if (event)
-			{
-				event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
-			}
-		}
-		return 0;
+		XQ_outputLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
+		MessageBoxA(nullptr, ("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str(), "CQXQ 错误", MB_OK);
 	}
 	return 0;
-	
 }
 
 
