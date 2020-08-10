@@ -350,8 +350,16 @@ CQAPI(int32_t, OQ_SetUp, 0)()
 	return 0;
 }
 
+// QQ-群号 缓存 用于发送消息
 std::map<std::string, std::string> UserGroupCache;
 
+// 群-群成员json字符串缓存 用于获取群成员列表，群成员信息，缓存时间1小时，遇到群成员变动事件/群名片更改事件刷新
+std::map<long long, std::pair<std::string, time_t>> GroupMemberCache;
+
+// 群列表缓存 用于获取群列表，缓存时间1小时，遇到群添加/退出等事件刷新
+std::pair<std::string, time_t> GroupListCache;
+
+// 启用事件是否已经被调用，用于在QQ登陆成功以后再调用启用事件
 bool EnabledEventCalled = false;
 
 #ifdef XQ
@@ -606,6 +614,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupMemberIncreaseByApply)
 		{
+			GroupMemberCache.erase(atoll(sourceId));
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -620,6 +629,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupMemberIncreaseByInvite)
 		{
+			GroupMemberCache.erase(atoll(sourceId));
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -634,6 +644,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupMemberDecreaseByExit)
 		{
+			GroupMemberCache.erase(atoll(sourceId));
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -648,6 +659,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupMemberDecreaseByKick)
 		{
+			GroupMemberCache.erase(atoll(sourceId));
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -688,6 +700,10 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				}
 			}
 			return 0;
+		}
+		if (msgType == XQ_groupCardChange)
+		{
+			GroupMemberCache.erase(atoll(sourceId));
 		}
 		return 0;
 	}
@@ -853,14 +869,32 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 	return ret.c_str();
 }
 
-CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL cache)
+CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL disableCache)
 {
 	static std::string ret;
-	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
-	std::string memberListStr = memberList ? memberList : "";
-	if (memberListStr.empty()) return "";
+
+	// 判断是否是新获取的列表
+	bool newRetrieved = false;
+	std::string memberListStr;
+
+	// 判断是否要使用缓存
+	if (disableCache || !GroupMemberCache.count(group) || (time(nullptr) - GroupMemberCache[group].second) > 3600)
+	{
+		newRetrieved = true;
+		const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+		memberListStr = memberList ? memberList : "";
+	}
+	else
+	{
+		memberListStr = GroupMemberCache[group].first;
+	}
+
 	try
 	{
+		if (memberListStr.empty())
+		{
+			throw std::exception("GetGroupMemberList Failed");
+		}
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		std::string groupStr = std::to_string(group);
 		const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
@@ -882,11 +916,12 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL c
 		p.add(maxNum);
 		p.add(friendNum);
 		ret = base64_encode(p.getAll());
+		if (newRetrieved) GroupMemberCache[group] = { memberListStr, time(nullptr) };
 		return ret.c_str();
 	}
 	catch (std::exception&)
 	{
-		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberList).c_str());
+		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string groupStr = std::to_string(group);
 		const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
 		std::string groupNameStr = groupName ? groupName : "";
@@ -990,14 +1025,31 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 	}
 }
 
-CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL cache)
+CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL disableCache)
 {
 	static std::string ret;
-	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
-	std::string memberListStr = memberList ? memberList : "";
-	if (memberListStr.empty()) return "";
+	// 判断是否是新获取的列表
+	bool newRetrieved = false;
+	std::string memberListStr;
+
+	// 判断是否要使用缓存
+	if (disableCache || !GroupMemberCache.count(group) || (time(nullptr) - GroupMemberCache[group].second) > 3600)
+	{
+		newRetrieved = true;
+		const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+		memberListStr = memberList ? memberList : "";
+	}
+	else
+	{
+		memberListStr = GroupMemberCache[group].first;
+	}
+
 	try
 	{
+		if (memberListStr.empty())
+		{
+			throw std::exception("GetGroupMemberList Failed");
+		}
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		long long owner = j["owner"].get<long long>();
 		std::set<long long> admin = j["adm"].get<std::set<long long>>();
@@ -1024,11 +1076,12 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		t.add(FALSE);
 		t.add(TRUE);
 		ret = base64_encode(t.getAll());
+		if (newRetrieved) GroupMemberCache[group] = { memberListStr, time(nullptr) };
 		return ret.c_str();
 	}
 	catch (std::exception&)
 	{
-		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberList).c_str());
+		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string grpStr = std::to_string(group);
 		std::string accStr = std::to_string(account);
 		Unpack p;
@@ -1078,9 +1131,12 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 	static std::string ret;
 	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
 	std::string memberListStr = memberList ? memberList : "";
-	if (memberListStr.empty()) return "";
 	try
 	{
+		if (memberListStr.empty())
+		{
+			throw std::exception("GetGroupMemberList Failed");
+		}
 		Unpack p;
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		long long owner = j["owner"].get<long long>();
@@ -1113,6 +1169,7 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			t.add(TRUE);
 			p.add(t);
 		}
+		GroupMemberCache[group] = { memberListStr, time(nullptr) };
 		ret = base64_encode(p.getAll());
 		return ret.c_str();
 	}

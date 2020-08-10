@@ -49,6 +49,8 @@ typedef int32_t (__stdcall* EvFriendAdd)(int32_t, int32_t, int64_t);
 
 #define XQ_LogInComplete 1101
 
+#define XQ_groupCardChange 217
+
 #define CQ_eventPrivateMsg 21
 #define CQ_eventGroupMsg 2
 #define CQ_eventDiscussMsg 4
