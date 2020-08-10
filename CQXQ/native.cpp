@@ -14,6 +14,7 @@
 #include "Unpack.h"
 #include "GlobalVar.h"
 #include "GUI.h"
+#include "resource.h"
 
 using namespace std;
 
@@ -296,7 +297,32 @@ CQAPI(const char*, OQ_Create, 0)()
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string pathStr(path);
-	std::string ppath = pathStr.substr(0, pathStr.rfind('\\')) + "\\CQPlugins\\";
+	pathStr = pathStr.substr(0, pathStr.rfind('\\'));
+
+	HRSRC rscInfo = FindResourceA(hDllModule, MAKEINTRESOURCEA(IDR_CQP1), "CQP");
+	HGLOBAL rsc = LoadResource(hDllModule, rscInfo);
+	DWORD size = SizeofResource(hDllModule, rscInfo);
+	char* rscPtr = (char*)LockResource(rsc);
+	if (rscPtr && size)
+	{
+		std::string rscStr(rscPtr, size);
+		ofstream ofCQP(pathStr + "\\CQP.dll", ios::out | ios::trunc | ios::binary);
+		if (ofCQP) 
+		{
+			ofCQP << rscStr;
+			XQ_outputLog("写出CQP.dll成功");
+		}
+		else
+		{
+			XQ_outputLog("写出CQP.dll失败！无法创建文件输出流！");
+		}
+	}
+	else
+	{
+		XQ_outputLog("写出CQP.dll失败！获取资源失败！");
+	}
+
+	std::string ppath = pathStr + "\\CQPlugins\\";
 	std::filesystem::create_directories(ppath);
 	for(const auto& file : std::filesystem::directory_iterator(ppath))
 	{
@@ -1052,7 +1078,8 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		}
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		long long owner = j["owner"].get<long long>();
-		std::set<long long> admin = j["adm"].get<std::set<long long>>();
+		std::set<long long> admin;
+		if (j.count("adm")) j["adm"].get_to(admin);
 		std::map<std::string, std::string> lvlName = j["levelname"].get<std::map<std::string, std::string>>();
 		for (auto& item : lvlName)
 		{
@@ -1140,7 +1167,8 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 		Unpack p;
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		long long owner = j["owner"].get<long long>();
-		std::set<long long> admin = j["adm"].get<std::set<long long>>();
+		std::set<long long> admin;
+		if (j.count("adm")) j["adm"].get_to(admin);
 		int mem_num = j["mem_num"].get<int>();
 		std::map<std::string, std::string> lvlName = j["levelname"].get<std::map<std::string, std::string>>();
 		for (auto& item : lvlName)

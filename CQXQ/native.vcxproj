@@ -187,6 +187,7 @@
     <ClInclude Include="GUI.h" />
     <ClInclude Include="json.hpp" />
     <ClInclude Include="native.h" />
+    <ClInclude Include="resource.h" />
     <ClInclude Include="Unpack.h" />
   </ItemGroup>
   <ItemGroup>
@@ -195,6 +196,12 @@
     <ClCompile Include="GUI.cpp" />
     <ClCompile Include="native.cpp" />
     <ClCompile Include="Unpack.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Resource.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="CQP.dll" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
