@@ -90,6 +90,10 @@ XQAPI(XQ_upLoadPic, const char*, const char* botQQ, int32_t uploadType, const ch
 
 XQAPI(XQ_ifFriend, BOOL, const char* botQQ, const char* QQ)
 
+XQAPI(XQ_getCookies, const char*, const char* botQQ)
+
+XQAPI(XQ_getBkn, const char*, const char* botQQ)
+
 HMODULE XQHModule = nullptr;
 
 int loadCQPlugin(const std::filesystem::path& file)
@@ -278,7 +282,7 @@ CQAPI(const char*, OQ_Create, 0)()
 	_XQ_quitGroup = (XQ_quitGroup_TYPE)GetProcAddress(XQHModule, "Api_QuitGroup");
 	_XQ_getGroupMemberNum = (XQ_getGroupMemberNum_TYPE)GetProcAddress(XQHModule, "Api_GetGroupMemberNum");
 	_XQ_setAnon = (XQ_setAnon_TYPE)GetProcAddress(XQHModule, "Api_SetAnon");
-	_XQ_shutUp = (XQ_shutUp_TYPE)GetProcAddress(XQHModule, "Api_ShutUp");
+	_XQ_shutUp = (XQ_shutUp_TYPE)GetProcAddress(XQHModule, "Api_ShutUP");
 	_XQ_setGroupCard = (XQ_setGroupCard_TYPE)GetProcAddress(XQHModule, "Api_SetGroupCard");
 	_XQ_setAdmin = (XQ_setAdmin_TYPE)GetProcAddress(XQHModule, "Api_SetAdmin");
 	_XQ_kickGroupMBR = (XQ_kickGroupMBR_TYPE)GetProcAddress(XQHModule, "Api_KickGroupMBR");
@@ -287,6 +291,8 @@ CQAPI(const char*, OQ_Create, 0)()
 	_XQ_getOnlineList = (XQ_getOnlineList_TYPE)GetProcAddress(XQHModule, "Api_GetOnLineList");
 	_XQ_upLoadPic = (XQ_upLoadPic_TYPE)GetProcAddress(XQHModule, "Api_UpLoadPic");
 	_XQ_ifFriend = (XQ_ifFriend_TYPE)GetProcAddress(XQHModule, "Api_IfFriend");
+	_XQ_getCookies = (XQ_getCookies_TYPE)GetProcAddress(XQHModule, "Api_GetCookies");
+	_XQ_getBkn = (XQ_getBkn_TYPE)GetProcAddress(XQHModule, "Api_GetBkn");
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string pathStr(path);
@@ -880,35 +886,31 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL c
 	}
 	catch (std::exception&)
 	{
-		return "";
-	}
-	return "";
-	/*
-	static std::string ret;
-	std::string groupStr = std::to_string(group);
-	const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
-	std::string groupNameStr = groupName ? groupName : "";
-	const char* groupNum = XQ_getGroupMemberNum(robotQQ.c_str(), groupStr.c_str());
-	int currentNum = 0, maxNum = 0;
-	if (groupNum)
-	{
-		std::string groupNumStr = groupNum;
-		size_t newline = groupNumStr.find('\n');
-		if (newline != string::npos)
+		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberList).c_str());
+		std::string groupStr = std::to_string(group);
+		const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
+		std::string groupNameStr = groupName ? groupName : "";
+		const char* groupNum = XQ_getGroupMemberNum(robotQQ.c_str(), groupStr.c_str());
+		int currentNum = 0, maxNum = 0;
+		if (groupNum)
 		{
-			currentNum = atoi(groupNumStr.substr(0, newline).c_str());
-			maxNum = atoi(groupNumStr.substr(newline + 1).c_str());
+			std::string groupNumStr = groupNum;
+			size_t newline = groupNumStr.find('\n');
+			if (newline != string::npos)
+			{
+				currentNum = atoi(groupNumStr.substr(0, newline).c_str());
+				maxNum = atoi(groupNumStr.substr(newline + 1).c_str());
+			}
 		}
+		Unpack p;
+		p.add(group);
+		p.add(groupNameStr);
+		p.add(currentNum);
+		p.add(maxNum);
+		p.add(0); // 这种方式暂不支持好友人数
+		ret = base64_encode(p.getAll());
+		return ret.c_str();
 	}
-	Unpack p;
-	p.add(group);
-	p.add(groupNameStr);
-	p.add(currentNum);
-	p.add(maxNum);
-	p.add(0); // 暂不支持获取群内好友人数
-	ret = base64_encode(p.getAll());
-	return ret.c_str();
-	*/
 }
 
 CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
@@ -954,43 +956,38 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 	}
 	catch (std::exception&)
 	{
-		return "";
-	}
-	return "";
-
-	/*
-	static std::string ret;
-	const char* group = XQ_getGroupList_B(robotQQ.c_str());
-	if (!group) return "";
-	std::string groupList = group;
-	Unpack p;
-	std::vector<Unpack> Groups;
-	int count = 0;
-	while (!groupList.empty())
-	{
-		size_t endline = groupList.find('\n');
-		std::string item = groupList.substr(0, endline);
-		while (!item.empty() && item[item.length() - 1] == '\r' || item[item.length() - 1] == '\n') item.erase(item.end() - 1);
-		if (!item.empty())
+		XQ_outputLog(("警告, 获取群列表失败, 正在使用更慢的另一种方法尝试: "s + groupList).c_str());
+		const char* group = XQ_getGroupList_B(robotQQ.c_str());
+		if (!group) return "";
+		std::string groupList = group;
+		Unpack p;
+		std::vector<Unpack> Groups;
+		int count = 0;
+		while (!groupList.empty())
 		{
-			Unpack tmp;
-			tmp.add(atoll(item.c_str()));
-			const char* groupName = XQ_getGroupName(robotQQ.c_str(), item.c_str());
-			tmp.add(groupName ? groupName : "");
-			Groups.push_back(tmp);
-			count++;
+			size_t endline = groupList.find('\n');
+			std::string item = groupList.substr(0, endline);
+			while (!item.empty() && item[item.length() - 1] == '\r' || item[item.length() - 1] == '\n') item.erase(item.end() - 1);
+			if (!item.empty())
+			{
+				Unpack tmp;
+				tmp.add(atoll(item.c_str()));
+				const char* groupName = XQ_getGroupName(robotQQ.c_str(), item.c_str());
+				tmp.add(groupName ? groupName : "");
+				Groups.push_back(tmp);
+				count++;
+			}
+			if (endline == string::npos) groupList = "";
+			else groupList = groupList.substr(endline + 1);
 		}
-		if (endline == string::npos) groupList = "";
-		else groupList = groupList.substr(endline + 1);
+		p.add(count);
+		for (auto& g : Groups)
+		{
+			p.add(g);
+		}
+		ret = base64_encode(p.getAll());
+		return ret.c_str();
 	}
-	p.add(count);
-	for(auto& g: Groups)
-	{
-		p.add(g);
-	}
-	ret = base64_encode(p.getAll());
-	return ret.c_str();
-	*/
 }
 
 CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL cache)
@@ -1031,54 +1028,49 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 	}
 	catch (std::exception&)
 	{
-		return "";
-	}
-	return "";
-	
-	/*
-	static std::string ret;
-	std::string grpStr = std::to_string(group);
-	std::string accStr = std::to_string(account);
-	Unpack p;
-	p.add(group);
-	p.add(account);
-	const char* nick = XQ_getNick(robotQQ.c_str(), accStr.c_str());
-	p.add(nick ? nick : "");
-	const char* groupCard = XQ_getGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
-	p.add(groupCard ? groupCard : "");
-	p.add(255);
-	p.add(-1);
-	p.add("");
-	p.add(0);
-	p.add(0);
-	p.add("");
-	const char* admin = XQ_getGroupAdmin(robotQQ.c_str(), std::to_string(group).c_str());
-	std::string adminList = admin ? admin : "";
-	int count = 0;
-	int permissions = 1;
-	while (!adminList.empty())
-	{
-		size_t endline = adminList.find('\n');
-		std::string item = adminList.substr(0, endline);
-		while (!item.empty() && item[item.length() - 1] == '\r' || item[item.length() - 1] == '\n') item.erase(item.end() - 1);
-		if (item == accStr)
+		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberList).c_str());
+		std::string grpStr = std::to_string(group);
+		std::string accStr = std::to_string(account);
+		Unpack p;
+		p.add(group);
+		p.add(account);
+		const char* nick = XQ_getNick(robotQQ.c_str(), accStr.c_str());
+		p.add(nick ? nick : "");
+		const char* groupCard = XQ_getGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
+		p.add(groupCard ? groupCard : "");
+		p.add(255);
+		p.add(-1);
+		p.add("");
+		p.add(0);
+		p.add(0);
+		p.add("");
+		const char* admin = XQ_getGroupAdmin(robotQQ.c_str(), std::to_string(group).c_str());
+		std::string adminList = admin ? admin : "";
+		int count = 0;
+		int permissions = 1;
+		while (!adminList.empty())
 		{
-			if (count == 0)permissions = 3;
-			else permissions = 2;
-			break;
+			size_t endline = adminList.find('\n');
+			std::string item = adminList.substr(0, endline);
+			while (!item.empty() && item[item.length() - 1] == '\r' || item[item.length() - 1] == '\n') item.erase(item.end() - 1);
+			if (item == accStr)
+			{
+				if (count == 0)permissions = 3;
+				else permissions = 2;
+				break;
+			}
+			if (endline == string::npos) adminList = "";
+			else adminList = adminList.substr(endline + 1);
+			count++;
 		}
-		if (endline == string::npos) adminList = "";
-		else adminList = adminList.substr(endline + 1);
-		count++;
+		p.add(permissions);
+		p.add("");
+		p.add(0);
+		p.add(FALSE);
+		p.add(TRUE);
+		ret = base64_encode(p.getAll());
+		return ret.c_str();
 	}
-	p.add(permissions);
-	p.add("");
-	p.add(0);
-	p.add(FALSE);
-	p.add(TRUE);
-	ret = base64_encode(p.getAll());
-	*/
-	return ret.c_str();
 }
 
 CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
@@ -1133,14 +1125,12 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 
 CQAPI(const char*, CQ_getCookiesV2, 8)(int32_t plugin_id, const char* domain)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了不支持的API CQ_getCookiesV2").c_str());
-	return "";
+	return XQ_getCookies(robotQQ.c_str());
 }
 
 CQAPI(const char*, CQ_getCsrfToken, 4)(int32_t plugin_id)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了不支持的API CQ_getCsrfToken").c_str());
-	return "";
+	return XQ_getBkn(robotQQ.c_str());
 }
 
 CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* image)
