@@ -501,7 +501,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				plugins[SelectedIndex].enabled = false;
 				ButtonEnable.SetText("∆Ù”√");
 				if (!plugins[SelectedIndex].events.count(CQ_eventDisable)) return 0;
-				const auto disable = IntMethod(GetProcAddress(plugins[SelectedIndex].dll, plugins[SelectedIndex].events.at(CQ_eventDisable).c_str()));
+				const auto disable = IntMethod(plugins[SelectedIndex].events.at(CQ_eventDisable));
 				if (disable)
 				{
 					disable();
@@ -512,7 +512,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				plugins[SelectedIndex].enabled = true;
 				ButtonEnable.SetText("Õ£”√");
 				if (!plugins[SelectedIndex].events.count(CQ_eventEnable)) return 0;
-				const auto enable = IntMethod(GetProcAddress(plugins[SelectedIndex].dll, plugins[SelectedIndex].events.at(CQ_eventEnable).c_str()));
+				const auto enable = IntMethod(plugins[SelectedIndex].events.at(CQ_eventEnable));
 				if (enable)
 				{
 					enable();
@@ -547,7 +547,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			);
 			if (ret)
 			{
-				const auto m = IntMethod(GetProcAddress(plugins[SelectedIndex].dll, plugins[SelectedIndex].menus[ret - 1].second.c_str()));
+				const auto m = IntMethod(plugins[SelectedIndex].menus[ret - 1].second);
 				if (m)
 				{
 					m();

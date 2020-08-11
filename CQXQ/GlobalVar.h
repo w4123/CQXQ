@@ -16,8 +16,8 @@ struct native_plugin
 	int version_id;
 	std::string author;
 	std::string description;
-	std::map<int, std::string> events;
-	std::vector<std::pair<std::string, std::string>> menus;
+	std::map<int, FARPROC> events;
+	std::vector<std::pair<std::string, FARPROC>> menus;
 	HMODULE dll;
 	bool enabled;
 

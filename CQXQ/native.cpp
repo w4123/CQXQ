@@ -112,10 +112,11 @@ int loadCQPlugin(const std::filesystem::path& file)
 		FreeLibrary(dll);
 		return err;
 	}
-	// 读取Json
+	// 读取Jso	n
 	auto fileCopy = file;
 	fileCopy.replace_extension(".json");
 	ifstream jsonstream(fileCopy);
+	FARPROC init = nullptr;
 	if (jsonstream)
 	{
 		try
@@ -128,12 +129,48 @@ int loadCQPlugin(const std::filesystem::path& file)
 			plugin.description = UTF8toGBK(j["description"].get<std::string>());
 			for(const auto& it : j["event"])
 			{
-				plugin.events[it["type"].get<int>()] = it["function"].get<std::string>();
+				int type = it["type"].get<int>();
+				FARPROC procAddress = nullptr;
+				if (it.count("function"))
+				{
+					procAddress = GetProcAddress(dll, UTF8toGBK(it["function"].get<std::string>()).c_str());
+				}
+				else if (it.count("offset"))
+				{
+					procAddress = FARPROC((BYTE*)dll + it["offset"].get<int>());
+				}
+				 
+				if (procAddress)
+				{
+					plugin.events[type] = procAddress;
+				}
+				else
+				{
+					XQ_outputLog(("加载" + file.filename().string() + "的事件类型" + std::to_string(type) + "时失败! 请检查json文件是否正确!").c_str());
+				}
 			}
 			for(const auto& it:j["menu"])
 			{
-				plugin.menus.push_back({ UTF8toGBK(it["name"].get<std::string>()), it["function"].get<std::string>() });
+				FARPROC procAddress = nullptr;
+				if (it.count("function"))
+				{
+					procAddress = GetProcAddress(dll, UTF8toGBK(it["function"].get<std::string>()).c_str());
+				}
+				else if (it.count("offset"))
+				{
+					procAddress = FARPROC((BYTE*)dll + it["offset"].get<int>());
+				}
+				if (procAddress)
+				{
+					plugin.menus.push_back({ UTF8toGBK(it["name"].get<std::string>()), procAddress });
+				}
+				else
+				{
+					XQ_outputLog(("加载" + file.filename().string() + "的菜单" + UTF8toGBK(it["name"].get<std::string>()) + "时失败! 请检查json文件是否正确!").c_str());
+				}
+				
 			}
+			if(j.count("init_offset")) init = FARPROC((BYTE*)dll + j["init_offset"].get<int>());
 		}
 		catch(std::exception& e)
 		{
@@ -148,11 +185,10 @@ int loadCQPlugin(const std::filesystem::path& file)
 		FreeLibrary(dll);
 		return 0;
 	}
-
-	const auto init = FuncInitialize(GetProcAddress(dll, "Initialize"));
-	if (init)
+	const auto initFunc = FuncInitialize(init ? init : GetProcAddress(dll, "Initialize"));
+	if (initFunc)
 	{
-		init(plugin.id);
+		initFunc(plugin.id);
 	}
 	else
 	{
@@ -348,7 +384,7 @@ CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 	for (const auto& plugin : plugins)
 	{
 		if (!plugin.events.count(CQ_eventExit)) continue;
-		const auto exit = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventExit).c_str()));
+		const auto exit = IntMethod(plugin.events.at(CQ_eventExit));
 		if (exit)
 		{
 			exit();
@@ -403,7 +439,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.events.count(CQ_eventStartup)) continue;
-				const auto startup = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventStartup).c_str()));
+				const auto startup = IntMethod(plugin.events.at(CQ_eventStartup));
 				if (startup)
 				{
 					startup();
@@ -422,7 +458,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				{
 					if (!plugin.enabled) continue;
 					if (!plugin.events.count(CQ_eventEnable)) continue;
-					const auto enable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventEnable).c_str()));
+					const auto enable = IntMethod(plugin.events.at(CQ_eventEnable));
 					if (enable)
 					{
 						enable();
@@ -440,7 +476,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				{
 					if (!plugin.enabled) continue;
 					if (!plugin.events.count(CQ_eventEnable)) continue;
-					const auto enable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventEnable).c_str()));
+					const auto enable = IntMethod(plugin.events.at(CQ_eventEnable));
 					if (enable)
 					{
 						enable();
@@ -458,7 +494,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventDisable)) continue;
-				const auto disable = IntMethod(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventDisable).c_str()));
+				const auto disable = IntMethod(plugin.events.at(CQ_eventDisable));
 				if (disable)
 				{
 					disable();
@@ -472,7 +508,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-				const auto privMsg = EvPriMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventPrivateMsg).c_str()));
+				const auto privMsg = EvPriMsg(plugin.events.at(CQ_eventPrivateMsg));
 				if (privMsg)
 				{
 					privMsg(11, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
@@ -487,7 +523,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-				const auto privMsg = EvPriMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventPrivateMsg).c_str()));
+				const auto privMsg = EvPriMsg(plugin.events.at(CQ_eventPrivateMsg));
 				if (privMsg)
 				{
 					privMsg(2, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
@@ -501,7 +537,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventGroupMsg)) continue;
-				const auto groupMsg = EvGroupMsg(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventGroupMsg).c_str()));
+				const auto groupMsg = EvGroupMsg(plugin.events.at(CQ_eventGroupMsg));
 				if (groupMsg)
 				{
 					groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0);
@@ -515,7 +551,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-				const auto invited = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
+				const auto invited = EvRequestAddGroup(plugin.events.at(CQ_eventRequest_AddGroup));
 				if (invited)
 				{
 					Unpack p;
@@ -534,7 +570,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-				const auto addReq = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
+				const auto addReq = EvRequestAddGroup(plugin.events.at(CQ_eventRequest_AddGroup));
 				if (addReq)
 				{
 					Unpack p;
@@ -553,7 +589,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-				const auto addReq = EvRequestAddGroup(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddGroup).c_str()));
+				const auto addReq = EvRequestAddGroup(plugin.events.at(CQ_eventRequest_AddGroup));
 				if (addReq)
 				{
 					Unpack p;
@@ -572,7 +608,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventRequest_AddFriend)) continue;
-				const auto addReq = EvRequestAddFriend(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventRequest_AddFriend).c_str()));
+				const auto addReq = EvRequestAddFriend(plugin.events.at(CQ_eventRequest_AddFriend));
 				if (addReq)
 				{
 					addReq(1, 0, atoll(activeQQ), msg, activeQQ);
@@ -588,7 +624,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
 				if (ban)
 				{
 					ban(2, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60);
@@ -602,7 +638,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
 				if (ban)
 				{
 					ban(1, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0);
@@ -616,7 +652,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
 				if (ban)
 				{
 					ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0);
@@ -630,7 +666,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupBan).c_str()));
+				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
 				if (ban)
 				{
 					ban(1, 0, atoll(sourceId), atoll(activeQQ), 0, 0);
@@ -645,7 +681,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
-				const auto MbrInc = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberIncrease).c_str()));
+				const auto MbrInc = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberIncrease));
 				if (MbrInc)
 				{
 					MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
@@ -660,7 +696,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
-				const auto MbrInc = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberIncrease).c_str()));
+				const auto MbrInc = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberIncrease));
 				if (MbrInc)
 				{
 					MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
@@ -675,7 +711,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
-				const auto event = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberDecrease).c_str()));
+				const auto event = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberDecrease));
 				if (event)
 				{
 					event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ));
@@ -690,7 +726,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
-				const auto event = EvGroupMember(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupMemberDecrease).c_str()));
+				const auto event = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberDecrease));
 				if (event)
 				{
 					if (passiveQQ == robotQQ) event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
@@ -705,7 +741,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
-				const auto event = EvGroupAdmin(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupAdmin).c_str()));
+				const auto event = EvGroupAdmin(plugin.events.at(CQ_eventSystem_GroupAdmin));
 				if (event)
 				{
 					event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
@@ -719,7 +755,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			{
 				if (!plugin.enabled) continue;
 				if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
-				const auto event = EvGroupAdmin(GetProcAddress(plugin.dll, plugin.events.at(CQ_eventSystem_GroupAdmin).c_str()));
+				const auto event = EvGroupAdmin(plugin.events.at(CQ_eventSystem_GroupAdmin));
 				if (event)
 				{
 					event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
