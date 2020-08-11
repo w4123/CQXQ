@@ -624,7 +624,7 @@ LRESULT GUI::CreateMainPage()
 		355, 426,
 		m_hwnd,
 		reinterpret_cast<HMENU>(ID_MASTER_LVPLUGIN));
-	ListViewPlugin.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_TWOCLICKACTIVATE | LVS_EX_UNDERLINEHOT);
+	ListViewPlugin.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_TWOCLICKACTIVATE | LVS_EX_FULLROWSELECT);
 
 	ListViewPlugin.AddAllTextColumn(std::vector<std::pair<std::string, int>>{ {"ID", 50}, { "名称", 300 }, { "作者", 200 }, { "版本", 200 }});
 	int index = 0;
@@ -651,7 +651,7 @@ int WINAPI GUIMain()
 	// 初始化CommonControl
 	INITCOMMONCONTROLSEX icex; // Structure for control initialization.
 	icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
-	icex.dwICC = ICC_STANDARD_CLASSES | ICC_TAB_CLASSES | ICC_LISTVIEW_CLASSES | ICC_PROGRESS_CLASS;
+	icex.dwICC = ICC_STANDARD_CLASSES | ICC_LISTVIEW_CLASSES;
 	InitCommonControlsEx(&icex);
 
 	// 主GUI

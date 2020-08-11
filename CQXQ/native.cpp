@@ -287,12 +287,12 @@ CQAPI(const char*, XQ_Create, 4)(const char* ver)
 CQAPI(const char*, OQ_Create, 0)()
 #endif
 {
+	// 载入API DLL并加载API函数
 #ifdef XQ
 	XQHModule = LoadLibraryA("xqapi.dll");
 #else
 	XQHModule = LoadLibraryA("OQapi.dll");
 #endif
-	CQPHModule = LoadLibraryA("CQP.dll");
 	_XQ_outputLog = (XQ_outputLog_TYPE)GetProcAddress(XQHModule, "Api_OutPutLog");
 	_XQ_sendMsg = (XQ_sendMsg_TYPE)GetProcAddress(XQHModule, "Api_SendMsg");
 	_XQ_getNick = (XQ_getNick_TYPE)GetProcAddress(XQHModule, "Api_GetNick");
@@ -324,11 +324,15 @@ CQAPI(const char*, OQ_Create, 0)()
 	_XQ_ifFriend = (XQ_ifFriend_TYPE)GetProcAddress(XQHModule, "Api_IfFriend");
 	_XQ_getCookies = (XQ_getCookies_TYPE)GetProcAddress(XQHModule, "Api_GetCookies");
 	_XQ_getBkn = (XQ_getBkn_TYPE)GetProcAddress(XQHModule, "Api_GetBkn");
+
+	// 获取当前路径
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string pathStr(path);
 	pathStr = pathStr.substr(0, pathStr.rfind('\\'));
 
+
+	// 写出CQP.dll
 	HRSRC rscInfo = FindResourceA(hDllModule, MAKEINTRESOURCEA(IDR_CQP1), "CQP");
 	HGLOBAL rsc = LoadResource(hDllModule, rscInfo);
 	DWORD size = SizeofResource(hDllModule, rscInfo);
@@ -352,6 +356,10 @@ CQAPI(const char*, OQ_Create, 0)()
 		XQ_outputLog("写出CQP.dll失败！获取资源失败！");
 	}
 
+	// 加载CQP.dll
+	CQPHModule = LoadLibraryA("CQP.dll");
+
+	// 加载CQ插件
 	std::string ppath = pathStr + "\\CQPlugins\\";
 	std::filesystem::create_directories(ppath);
 	for(const auto& file : std::filesystem::directory_iterator(ppath))
