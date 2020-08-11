@@ -96,6 +96,7 @@ XQAPI(XQ_getCookies, const char*, const char* botQQ)
 XQAPI(XQ_getBkn, const char*, const char* botQQ)
 
 HMODULE XQHModule = nullptr;
+HMODULE CQPHModule = nullptr;
 
 int loadCQPlugin(const std::filesystem::path& file)
 {
@@ -258,17 +259,9 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 					std::string pathStr(path);
 					std::string ppath = pathStr.substr(0, pathStr.rfind('\\')) + "\\data\\image\\";
 					ppath += msgStr.substr(l + 15, r - l - 15);
-					std::basic_ifstream<unsigned char> readImage(ppath, ios::in | std::ios::binary);
-					if (readImage)
-					{
-						std::basic_string<unsigned char> content((std::istreambuf_iterator<unsigned char>(readImage)), std::istreambuf_iterator<unsigned char>());
-						int common = 1;
-						int size = content.size();
-						content = std::basic_string<unsigned char>(reinterpret_cast<unsigned char*>(&common), 4) + std::basic_string<unsigned char>(reinterpret_cast<unsigned char*>(&size), 4) + content;
-						const char* uploadPic = XQ_upLoadPic(robotQQ.c_str(), uploadType, targetId, content.c_str() + 8);
-						std::string uploadPicStr = uploadPic ? uploadPic : "";
-						ret += uploadPicStr;
-					}
+					ret += "[pic=";
+					ret += ppath;
+					ret += "]";
 				}
 			}
 		}
@@ -299,6 +292,7 @@ CQAPI(const char*, OQ_Create, 0)()
 #else
 	XQHModule = LoadLibraryA("OQapi.dll");
 #endif
+	CQPHModule = LoadLibraryA("CQP.dll");
 	_XQ_outputLog = (XQ_outputLog_TYPE)GetProcAddress(XQHModule, "Api_OutPutLog");
 	_XQ_sendMsg = (XQ_sendMsg_TYPE)GetProcAddress(XQHModule, "Api_SendMsg");
 	_XQ_getNick = (XQ_getNick_TYPE)GetProcAddress(XQHModule, "Api_GetNick");
@@ -369,9 +363,9 @@ CQAPI(const char*, OQ_Create, 0)()
 	}
 	
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.2\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.3\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.2}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.0.3}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
@@ -391,6 +385,7 @@ CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 		}
 	}
 	FreeLibrary(XQHModule);
+	FreeLibrary(CQPHModule);
 	return 0;
 }
 
