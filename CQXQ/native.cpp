@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <fstream>
 #include <set>
+#include <exception>
+#include <stdexcept>
 #include "GlobalVar.h"
 #include "native.h"
 #include "CQTools.h"
@@ -24,6 +26,30 @@ std::string robotQQ;
 
 ctpl::thread_pool p(4);
 
+namespace XQAPI
+{
+	static vector<function<void(HMODULE)>> apiFuncInitializers;
+
+	static bool addFuncInit(const function<void(HMODULE)>& initializer) {
+		apiFuncInitializers.push_back(initializer);
+		return true;
+	}
+
+	void initFuncs(const HMODULE& hModule)
+	{
+		try
+		{
+			for (const auto& initializer : apiFuncInitializers) {
+				initializer(hModule);
+			}
+		}
+		catch (std::runtime_error& e)
+		{
+			MessageBoxA(nullptr, ("CQXQ初始化API致命错误，请检查你的先驱版本！程序即将退出: "s + e.what()).c_str(), "CQXQ错误", MB_OK);
+			exit(-1);
+		}
+	}
+
 #define XQAPI(Name, ReturnType, ...) using Name##_FUNC = std::function<ReturnType (__stdcall)(__VA_ARGS__)>; \
 	Name##_FUNC _##Name; \
 	using Name##_TYPE = ReturnType (__stdcall*)(__VA_ARGS__); \
@@ -31,89 +57,91 @@ ctpl::thread_pool p(4);
 	ReturnType Name(Args&&... args) \
 	{ \
 		return p.push([&args...](int iThread){ return _##Name(std::forward<Args>(args)...); }).get(); \
-	}
+	} \
+    static bool _init_##Name = addFuncInit( [] (const auto& hModule) { \
+        _##Name = reinterpret_cast<Name##_TYPE>(GetProcAddress(hModule, "Api_" #Name)); \
+        if (!_##Name) throw std::runtime_error("Unable to initialize API Function " #Name); \
+    });
 
-XQAPI(XQ_sendMsg, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId)
+	XQAPI(SendMsg, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId)
 
-XQAPI(XQ_outputLog, void, const char* content)
+	XQAPI(OutPutLog, void, const char* content)
 
-XQAPI(XQ_getNick, const char*, const char* botQQ, const char* QQ)
+	XQAPI(GetNick, const char*, const char* botQQ, const char* QQ)
 
-//XQAPI(XQ_getGender, int32_t, const char* botQQ, const char* QQ)
+	XQAPI(GetGroupAdmin, const char*, const char* botQQ, const char* groupId)
 
-//XQAPI(XQ_getAge, int32_t, const char* botQQ, const char* QQ)
+	XQAPI(GetGroupCard, const char*, const char* botQQ, const char* groupId, const char* QQ)
 
-XQAPI(XQ_getGroupAdmin, const char*, const char* botQQ, const char* groupId)
+	XQAPI(GetGroupList, const char*, const char* botQQ)
 
-XQAPI(XQ_getGroupCard, const char*, const char* botQQ, const char* groupId, const char* QQ)
+	XQAPI(GetGroupList_B, const char*, const char* botQQ)
 
-XQAPI(XQ_getGroupList, const char*, const char* botQQ)
+	XQAPI(GetGroupName, const char*, const char* botQQ, const char* groupId)
 
-XQAPI(XQ_getGroupList_B, const char*, const char* botQQ)
+	XQAPI(GetFriendList_B, const char*, const char* botQQ)
 
-XQAPI(XQ_getGroupName, const char*, const char* botQQ, const char* groupId)
+	XQAPI(GetFriendsRemark, const char*, const char* botQQ, const char* QQ)
 
-XQAPI(XQ_getFriendList, const char*, const char* botQQ)
+	XQAPI(GetGroupMemberList, const char*, const char* botQQ, const char* groupId)
 
-XQAPI(XQ_getFriendsRemark, const char*, const char* botQQ, const char* QQ)
+	XQAPI(GetGroupMemberList_B, const char*, const char* botQQ, const char* groupId)
 
-XQAPI(XQ_getGroupMemberList, const char*, const char* botQQ, const char* groupId)
+	XQAPI(GetGroupMemberList_C, const char*, const char* botQQ, const char* groupId)
 
-XQAPI(XQ_getGroupMemberList_B, const char*, const char* botQQ, const char* groupId)
+	XQAPI(HandleGroupEvent, void, const char* botQQ, int32_t reqType, const char* QQ, const char* groupId, const char* seq, int32_t rspType, const char* msg)
 
-XQAPI(XQ_getGroupMemberList_C, const char*, const char* botQQ, const char* groupId)
+	XQAPI(HandleFriendEvent, void, const char* botQQ, const char* QQ, int32_t rspType, const char* msg)
 
-XQAPI(XQ_handleGroupEvent, void, const char* botQQ, int32_t reqType, const char* QQ, const char* groupId, const char* seq, int32_t rspType, const char* msg)
+	XQAPI(QuitGroup, void, const char* botQQ, const char* groupId)
 
-XQAPI(XQ_handleFriendEvent, void, const char* botQQ, const char* QQ, int32_t rspType, const char* msg)
+	XQAPI(GetGroupMemberNum, const char*, const char* botQQ, const char* groupId)
 
-XQAPI(XQ_quitGroup, void, const char* botQQ, const char* groupId)
+	XQAPI(SetAnon, BOOL, const char* botQQ, const char* groupId, BOOL enable)
 
-XQAPI(XQ_getGroupMemberNum, const char*, const char* botQQ, const char* groupId)
+	XQAPI(ShutUP, void, const char* botQQ, const char* groupId, const char* QQ, int32_t duration)
 
-XQAPI(XQ_setAnon, BOOL, const char* botQQ, const char* groupId, BOOL enable)
+	XQAPI(SetGroupCard, BOOL, const char* botQQ, const char* groupId, const char* QQ, const char* card)
 
-XQAPI(XQ_shutUp, void, const char* botQQ, const char* groupId, const char* QQ, int32_t duration)
+	XQAPI(KickGroupMBR, void, const char* botQQ, const char* groupId, const char* QQ, BOOL refuseForever)
 
-XQAPI(XQ_setGroupCard, BOOL, const char* botQQ, const char* groupId, const char* QQ, const char* card)
+	XQAPI(UpVote, const char*, const char* botQQ, const char* QQ)
 
-XQAPI(XQ_setAdmin, const char*, const char* botQQ, const char* groupId, const char* QQ, BOOL admin)
+	XQAPI(IsEnable, BOOL)
 
-XQAPI(XQ_kickGroupMBR, void, const char* botQQ, const char* groupId, const char* QQ, BOOL refuseForever)
+	XQAPI(GetOnLineList, const char*)
 
-XQAPI(XQ_upVote, const char*, const char* botQQ, const char* QQ)
+	XQAPI(UpLoadPic, const char*, const char* botQQ, int32_t uploadType, const char* targetId, const unsigned char* image)
 
-XQAPI(XQ_isEnable, BOOL)
+	XQAPI(IfFriend, BOOL, const char* botQQ, const char* QQ)
 
-XQAPI(XQ_getOnlineList, const char*)
+	XQAPI(GetCookies, const char*, const char* botQQ)
 
-XQAPI(XQ_upLoadPic, const char*, const char* botQQ, int32_t uploadType, const char* targetId, const unsigned char* image)
+	XQAPI(GetBkn, const char*, const char* botQQ)
+#undef XQAPI
+}
 
-XQAPI(XQ_ifFriend, BOOL, const char* botQQ, const char* QQ)
 
-XQAPI(XQ_getCookies, const char*, const char* botQQ)
-
-XQAPI(XQ_getBkn, const char*, const char* botQQ)
 
 HMODULE XQHModule = nullptr;
 HMODULE CQPHModule = nullptr;
 
+// XQ根目录, 结尾不带斜杠
+std::string rootPath;
+
 int loadCQPlugin(const std::filesystem::path& file)
 {
-	char path[MAX_PATH];
-	GetModuleFileNameA(nullptr, path, MAX_PATH);
-	std::string pathStr(path);
-	std::string ppath = pathStr.substr(0, pathStr.rfind('\\')) + "\\CQPlugins\\";
+	std::string ppath = rootPath + "\\CQPlugins\\";
 	native_plugin plugin = { static_cast<int>(plugins.size()), file.filename().string() };
 	const auto dll = LoadLibraryA(file.string().c_str());
 	if (!dll)
 	{
 		int err = GetLastError();
-		XQ_outputLog(("加载"s + file.filename().string() + "失败！LoadLibrary错误代码：" + std::to_string(err)).c_str());
+		XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！LoadLibrary错误代码：" + std::to_string(err)).c_str());
 		FreeLibrary(dll);
 		return err;
 	}
-	// 读取Jso	n
+	// 读取Json
 	auto fileCopy = file;
 	fileCopy.replace_extension(".json");
 	ifstream jsonstream(fileCopy);
@@ -147,7 +175,7 @@ int loadCQPlugin(const std::filesystem::path& file)
 				}
 				else
 				{
-					XQ_outputLog(("加载" + file.filename().string() + "的事件类型" + std::to_string(type) + "时失败! 请检查json文件是否正确!").c_str());
+					XQAPI::OutPutLog(("加载" + file.filename().string() + "的事件类型" + std::to_string(type) + "时失败! 请检查json文件是否正确!").c_str());
 				}
 			}
 			for(const auto& it:j["menu"])
@@ -167,7 +195,7 @@ int loadCQPlugin(const std::filesystem::path& file)
 				}
 				else
 				{
-					XQ_outputLog(("加载" + file.filename().string() + "的菜单" + UTF8toGBK(it["name"].get<std::string>()) + "时失败! 请检查json文件是否正确!").c_str());
+					XQAPI::OutPutLog(("加载" + file.filename().string() + "的菜单" + UTF8toGBK(it["name"].get<std::string>()) + "时失败! 请检查json文件是否正确!").c_str());
 				}
 				
 			}
@@ -175,14 +203,14 @@ int loadCQPlugin(const std::filesystem::path& file)
 		}
 		catch(std::exception& e)
 		{
-			XQ_outputLog(("加载"s + file.filename().string() + "失败！Json文件读取失败! " + e.what()).c_str());
+			XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！Json文件读取失败! " + e.what()).c_str());
 			FreeLibrary(dll);
 			return 0;
 		}
 	}
 	else
 	{
-		XQ_outputLog(("加载"s + file.filename().string() + "失败！无法打开Json文件!").c_str());
+		XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！无法打开Json文件!").c_str());
 		FreeLibrary(dll);
 		return 0;
 	}
@@ -193,37 +221,63 @@ int loadCQPlugin(const std::filesystem::path& file)
 	}
 	else
 	{
-		XQ_outputLog(("加载"s + file.filename().string() + "失败！无公开的Initialize函数!").c_str());
+		XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！无公开的Initialize函数!").c_str());
 		FreeLibrary(dll);
 		return 0;
 	}
 	
 	plugin.dll = dll;
 	plugins.push_back(plugin);
-	XQ_outputLog(("加载"s + file.filename().string() + "成功！").c_str());
+	XQAPI::OutPutLog(("加载"s + file.filename().string() + "成功！").c_str());
 	
 	return 0;
 }
 
+
+// XQ码到CQ码
 std::string parseToCQCode(const char* msg)
 {
 	if (!msg) return "";
-	std::string ret(msg);
-	size_t find_res = ret.find("[@");
-	while (find_res != string::npos)
+	std::string_view msgStr(msg);
+	std::string ret;
+	size_t l = 0, r = 0, last = 0;
+	l = msgStr.find("[");
+	r = msgStr.find("]", l);
+	while (l != string::npos && r != string::npos)
 	{
-		ret.replace(find_res, 2, "[CQ:at,qq=");
-		find_res = ret.find("[@", find_res + 1);
+		ret += msgStr.substr(last, l - last);
+		if (msgStr.substr(l, 2) == "[@")
+		{
+			ret += "[CQ:at,qq=";
+			ret += msgStr.substr(l + 2, r - l - 2);
+			ret += "]";
+		}
+		else if (msgStr.substr(l, 5) == "[pic=")
+		{
+			ret += "[CQ:image,file=";
+			ret += msgStr.substr(l + 5, r - l - 5);
+			ret += "]";
+		}
+		else if (msgStr.substr(l, 5) == "[Voi=")
+		{
+			ret += "[CQ:record,file=";
+			ret += msgStr.substr(l + 5, r - l - 5);
+			ret += "]";
+		}
+		else
+		{
+			ret += msgStr.substr(l, r - l + 1);
+		}
+		last = r + 1;
+		l = msgStr.find("[", r);
+		r = msgStr.find(']', l);
 	}
-	find_res = ret.find("[pic=");
-	while (find_res != string::npos)
-	{
-		ret.replace(find_res, 5, "[CQ:image,file=");
-		find_res = ret.find("[pic=", find_res + 1);
-	}
+	ret += msgStr.substr(last);
 	return ret;
 }
 
+
+// CQ码到XQ码
 std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char* msg)
 {
 	if (!msg) return "";
@@ -243,27 +297,41 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 		}
 		else if (msgStr.substr(l, 15) == "[CQ:image,file=")
 		{
-			if (l + 15 < msgStr.length())
+			if (msgStr[l + 15] == '{')
 			{
-				if (msgStr[l + 15] == '{')
-				{
-					ret += "[pic=";
-					ret += msgStr.substr(l + 15, r - l - 15);
-					ret += "]";
-				}
-				else
-				{
-					char path[MAX_PATH];
-					std::string buffer;
-					GetModuleFileNameA(nullptr, path, MAX_PATH);
-					std::string pathStr(path);
-					std::string ppath = pathStr.substr(0, pathStr.rfind('\\')) + "\\data\\image\\";
-					ppath += msgStr.substr(l + 15, r - l - 15);
-					ret += "[pic=";
-					ret += ppath;
-					ret += "]";
-				}
+				ret += "[pic=";
+				ret += msgStr.substr(l + 15, r - l - 15);
+				ret += "]";
 			}
+			else
+			{
+				std::string ppath = rootPath + "\\data\\image\\";
+				ppath += msgStr.substr(l + 15, r - l - 15);
+				ret += "[pic=";
+				ret += ppath;
+				ret += "]";
+			}
+		}
+		else if (msgStr.substr(l, 16) == "[CQ:record,file=")
+		{
+			if (msgStr[l + 16] == '{')
+			{
+				ret += "[Voi=";
+				ret += msgStr.substr(l + 16, r - l - 16);
+				ret += "]";
+			}
+			else
+			{
+				std::string ppath = rootPath + "\\data\\record\\";
+				ppath += msgStr.substr(l + 16, r - l - 16);
+				ret += "[Voi=";
+				ret += ppath;
+				ret += "]";
+			}
+		}
+		else
+		{
+			ret += msgStr.substr(l, r - l + 1);
 		}
 		last = r + 1;
 		l = msgStr.find("[CQ", r);
@@ -287,50 +355,17 @@ CQAPI(const char*, XQ_Create, 4)(const char* ver)
 CQAPI(const char*, OQ_Create, 0)()
 #endif
 {
+	char path[MAX_PATH];
+	GetModuleFileNameA(nullptr, path, MAX_PATH);
+	std::string pathStr(path);
+	rootPath = pathStr.substr(0, pathStr.rfind("\\"));
 	// 载入API DLL并加载API函数
 #ifdef XQ
 	XQHModule = LoadLibraryA("xqapi.dll");
 #else
 	XQHModule = LoadLibraryA("OQapi.dll");
 #endif
-	_XQ_outputLog = (XQ_outputLog_TYPE)GetProcAddress(XQHModule, "Api_OutPutLog");
-	_XQ_sendMsg = (XQ_sendMsg_TYPE)GetProcAddress(XQHModule, "Api_SendMsg");
-	_XQ_getNick = (XQ_getNick_TYPE)GetProcAddress(XQHModule, "Api_GetNick");
-	//_XQ_getGender = (XQ_getGender_TYPE)GetProcAddress(XQHModule, "Api_GetGender");
-	//_XQ_getAge = (XQ_getAge_TYPE)GetProcAddress(XQHModule, "Api_GetAge");
-	_XQ_getGroupAdmin = (XQ_getGroupAdmin_TYPE)GetProcAddress(XQHModule, "Api_GetGroupAdmin");
-	_XQ_getGroupCard = (XQ_getGroupCard_TYPE)GetProcAddress(XQHModule, "Api_GetGroupCard");
-	_XQ_getGroupList = (XQ_getGroupList_TYPE)GetProcAddress(XQHModule, "Api_GetGroupList");
-	_XQ_getGroupList_B = (XQ_getGroupList_B_TYPE)GetProcAddress(XQHModule, "Api_GetGroupList_B");
-	_XQ_getGroupName = (XQ_getGroupName_TYPE)GetProcAddress(XQHModule, "Api_GetGroupName");
-	_XQ_getFriendList = (XQ_getFriendList_TYPE)GetProcAddress(XQHModule, "Api_GetFriendList_B");
-	_XQ_getFriendsRemark = (XQ_getFriendsRemark_TYPE)GetProcAddress(XQHModule, "Api_GetFriendsRemark");
-	_XQ_getGroupMemberList = (XQ_getGroupMemberList_TYPE)GetProcAddress(XQHModule, "Api_GetGroupMemberList");
-	_XQ_getGroupMemberList_B = (XQ_getGroupMemberList_B_TYPE)GetProcAddress(XQHModule, "Api_GetGroupMemberList_B");
-	_XQ_getGroupMemberList_C = (XQ_getGroupMemberList_C_TYPE)GetProcAddress(XQHModule, "Api_GetGroupMemberList_C");
-	_XQ_handleGroupEvent = (XQ_handleGroupEvent_TYPE)GetProcAddress(XQHModule, "Api_HandleGroupEvent");
-	_XQ_handleFriendEvent = (XQ_handleFriendEvent_TYPE)GetProcAddress(XQHModule, "Api_HandleFriendEvent");
-	_XQ_quitGroup = (XQ_quitGroup_TYPE)GetProcAddress(XQHModule, "Api_QuitGroup");
-	_XQ_getGroupMemberNum = (XQ_getGroupMemberNum_TYPE)GetProcAddress(XQHModule, "Api_GetGroupMemberNum");
-	_XQ_setAnon = (XQ_setAnon_TYPE)GetProcAddress(XQHModule, "Api_SetAnon");
-	_XQ_shutUp = (XQ_shutUp_TYPE)GetProcAddress(XQHModule, "Api_ShutUP");
-	_XQ_setGroupCard = (XQ_setGroupCard_TYPE)GetProcAddress(XQHModule, "Api_SetGroupCard");
-	_XQ_setAdmin = (XQ_setAdmin_TYPE)GetProcAddress(XQHModule, "Api_SetAdmin");
-	_XQ_kickGroupMBR = (XQ_kickGroupMBR_TYPE)GetProcAddress(XQHModule, "Api_KickGroupMBR");
-	_XQ_upVote = (XQ_upVote_TYPE)GetProcAddress(XQHModule, "Api_UpVote");
-	_XQ_isEnable = (XQ_isEnable_TYPE)GetProcAddress(XQHModule, "Api_IsEnable");
-	_XQ_getOnlineList = (XQ_getOnlineList_TYPE)GetProcAddress(XQHModule, "Api_GetOnLineList");
-	_XQ_upLoadPic = (XQ_upLoadPic_TYPE)GetProcAddress(XQHModule, "Api_UpLoadPic");
-	_XQ_ifFriend = (XQ_ifFriend_TYPE)GetProcAddress(XQHModule, "Api_IfFriend");
-	_XQ_getCookies = (XQ_getCookies_TYPE)GetProcAddress(XQHModule, "Api_GetCookies");
-	_XQ_getBkn = (XQ_getBkn_TYPE)GetProcAddress(XQHModule, "Api_GetBkn");
-
-	// 获取当前路径
-	char path[MAX_PATH];
-	GetModuleFileNameA(nullptr, path, MAX_PATH);
-	std::string pathStr(path);
-	pathStr = pathStr.substr(0, pathStr.rfind('\\'));
-
+	XQAPI::initFuncs(XQHModule);
 
 	// 写出CQP.dll
 	HRSRC rscInfo = FindResourceA(hDllModule, MAKEINTRESOURCEA(IDR_CQP1), "CQP");
@@ -340,27 +375,27 @@ CQAPI(const char*, OQ_Create, 0)()
 	if (rscPtr && size)
 	{
 		std::string rscStr(rscPtr, size);
-		ofstream ofCQP(pathStr + "\\CQP.dll", ios::out | ios::trunc | ios::binary);
+		ofstream ofCQP(rootPath + "\\CQP.dll", ios::out | ios::trunc | ios::binary);
 		if (ofCQP) 
 		{
 			ofCQP << rscStr;
-			XQ_outputLog("写出CQP.dll成功");
+			XQAPI::OutPutLog("写出CQP.dll成功");
 		}
 		else
 		{
-			XQ_outputLog("写出CQP.dll失败！无法创建文件输出流！");
+			XQAPI::OutPutLog("写出CQP.dll失败！无法创建文件输出流！");
 		}
 	}
 	else
 	{
-		XQ_outputLog("写出CQP.dll失败！获取资源失败！");
+		XQAPI::OutPutLog("写出CQP.dll失败！获取资源失败！");
 	}
 
 	// 加载CQP.dll
 	CQPHModule = LoadLibraryA("CQP.dll");
 
 	// 加载CQ插件
-	std::string ppath = pathStr + "\\CQPlugins\\";
+	std::string ppath = rootPath + "\\CQPlugins\\";
 	std::filesystem::create_directories(ppath);
 	for(const auto& file : std::filesystem::directory_iterator(ppath))
 	{
@@ -409,7 +444,7 @@ CQAPI(int32_t, OQ_SetUp, 0)()
 	}
 	catch (std::exception& e)
 	{
-		XQ_outputLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
+		XQAPI::OutPutLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
 		MessageBoxA(nullptr, ("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str(), "CQXQ 错误", MB_OK);
 	}
 	return 0;
@@ -452,7 +487,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_Enable)
 		{
-			const char* onlineList = XQ_getOnlineList();
+			const char* onlineList = XQAPI::GetOnLineList();
 			std::string onlineListStr = onlineList ? onlineList : "";
 
 			if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
@@ -473,7 +508,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_LogInComplete)
 		{
-			if (!EnabledEventCalled && XQ_isEnable())
+			if (!EnabledEventCalled && XQAPI::IsEnable())
 			{
 				for (const auto& plugin : plugins)
 				{
@@ -622,7 +657,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_GroupBanEvent)
 		{
 			// TODO: 禁言时间
-			XQ_outputLog(msg);
+			XQAPI::OutPutLog(msg);
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -774,7 +809,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 	}
 	catch (std::exception& e)
 	{
-		XQ_outputLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
+		XQAPI::OutPutLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
 		MessageBoxA(nullptr, ("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str(), "CQXQ 错误", MB_OK);
 	}
 	return 0;
@@ -797,17 +832,17 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 	if (robotQQ.empty()) return 1;
 	std::string accStr = std::to_string(account);
 	
-	if (XQ_ifFriend(robotQQ.c_str(), accStr.c_str()))
+	if (XQAPI::IfFriend(robotQQ.c_str(), accStr.c_str()))
 	{
-		XQ_sendMsg(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
+		XQAPI::SendMsg(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
 	}
 	else if (UserGroupCache.count(accStr))
 	{
-		XQ_sendMsg(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
+		XQAPI::SendMsg(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
 	}
 	else
 	{
-		XQ_outputLog(("无法发送消息给QQ" + accStr + ": 找不到可用的发送路径").c_str());
+		XQAPI::OutPutLog(("无法发送消息给QQ" + accStr + ": 找不到可用的发送路径").c_str());
 	}
 	
 	return 0;
@@ -817,13 +852,13 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 {
 	if (robotQQ.empty()) return 1;
 	std::string grpStr = std::to_string(group);
-	XQ_sendMsg(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0);
+	XQAPI::SendMsg(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setFatal, 8)(int32_t plugin_id, const char* info)
 {
-	XQ_outputLog((plugins[plugin_id].file + ": [FATAL] " + info).c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + ": [FATAL] " + info).c_str());
 	return 0;
 }
 
@@ -845,62 +880,62 @@ CQAPI(int64_t, CQ_getLoginQQ, 4)(int32_t plugin_id)
 
 CQAPI(const char*, CQ_getLoginNick, 4)(int32_t plugin_id)
 {
-	return XQ_getNick(robotQQ.c_str(), robotQQ.c_str());
+	return XQAPI::GetNick(robotQQ.c_str(), robotQQ.c_str());
 }
 
 CQAPI(int32_t, CQ_setGroupAnonymous, 16)(int32_t plugin_id, int64_t group, BOOL enable)
 {
-	XQ_setAnon(robotQQ.c_str(), std::to_string(group).c_str(), enable);
+	XQAPI::SetAnon(robotQQ.c_str(), std::to_string(group).c_str(), enable);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupBan, 28)(int32_t plugin_id, int64_t group, int64_t member, int64_t duration)
 {
-	XQ_shutUp(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(member).c_str(), static_cast<int32_t>(duration));
+	XQAPI::ShutUP(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(member).c_str(), static_cast<int32_t>(duration));
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupCard, 24)(int32_t plugin_id, int64_t group, int64_t member, const char* card)
 {
-	XQ_setGroupCard(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(member).c_str(), card);
+	XQAPI::SetGroupCard(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(member).c_str(), card);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupKick, 24)(int32_t plugin_id, int64_t group, int64_t member, BOOL reject)
 {
-	XQ_kickGroupMBR(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(member).c_str(), reject);
+	XQAPI::KickGroupMBR(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(member).c_str(), reject);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupLeave, 16)(int32_t plugin_id, int64_t group, BOOL dismiss)
 {
-	XQ_quitGroup(robotQQ.c_str(), std::to_string(group).c_str());
+	XQAPI::QuitGroup(robotQQ.c_str(), std::to_string(group).c_str());
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupSpecialTitle, 32)(int32_t plugin_id, int64_t group, int64_t member,
                                             const char* title, int64_t duration)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了不支持的API CQ_setGroupSpecialTitle").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setGroupSpecialTitle").c_str());
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupWholeBan, 16)(int32_t plugin_id, int64_t group, BOOL enable)
 {
-	XQ_shutUp(robotQQ.c_str(), std::to_string(group).c_str(), "", enable);
+	XQAPI::ShutUP(robotQQ.c_str(), std::to_string(group).c_str(), "", enable);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_deleteMsg, 12)(int32_t plugin_id, int64_t msg_id)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了未实现的API CQ_deleteMsg").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_deleteMsg").c_str());
 	return 0;
 }
 
 CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 {
 	static std::string ret;
-	const char* frdLst = XQ_getFriendList(robotQQ.c_str());
+	const char* frdLst = XQAPI::GetFriendList_B(robotQQ.c_str());
 	if (!frdLst) return "";
 	std::string friendList = frdLst;
 	Unpack p;
@@ -915,9 +950,9 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 		{
 			Unpack tmp;
 			tmp.add(atoll(item.c_str()));
-			const char* nick = XQ_getNick(robotQQ.c_str(), item.c_str());
+			const char* nick = XQAPI::GetNick(robotQQ.c_str(), item.c_str());
 			tmp.add(nick ? nick : "");
-			const char* remarks = XQ_getFriendsRemark(robotQQ.c_str(), item.c_str());
+			const char* remarks = XQAPI::GetFriendsRemark(robotQQ.c_str(), item.c_str());
 			tmp.add(remarks ? remarks : "");
 			Friends.push_back(tmp);
 			count++;
@@ -946,7 +981,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 	if (disableCache || !GroupMemberCache.count(group) || (time(nullptr) - GroupMemberCache[group].second) > 3600)
 	{
 		newRetrieved = true;
-		const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+		const char* memberList = XQAPI::GetGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
 		memberListStr = memberList ? memberList : "";
 	}
 	else
@@ -962,7 +997,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 		}
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		std::string groupStr = std::to_string(group);
-		const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
+		const char* groupName = XQAPI::GetGroupName(robotQQ.c_str(), groupStr.c_str());
 		std::string groupNameStr = groupName ? groupName : "";
 		int currentNum = j["mem_num"].get<int>();
 		int maxNum = j["max_num"].get<int>();
@@ -986,11 +1021,11 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 	}
 	catch (std::exception&)
 	{
-		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
+		XQAPI::OutPutLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string groupStr = std::to_string(group);
-		const char* groupName = XQ_getGroupName(robotQQ.c_str(), groupStr.c_str());
+		const char* groupName = XQAPI::GetGroupName(robotQQ.c_str(), groupStr.c_str());
 		std::string groupNameStr = groupName ? groupName : "";
-		const char* groupNum = XQ_getGroupMemberNum(robotQQ.c_str(), groupStr.c_str());
+		const char* groupNum = XQAPI::GetGroupMemberNum(robotQQ.c_str(), groupStr.c_str());
 		int currentNum = 0, maxNum = 0;
 		if (groupNum)
 		{
@@ -1017,7 +1052,7 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 {
 	static std::string ret;
 
-	const char* groupList = XQ_getGroupList(robotQQ.c_str());
+	const char* groupList = XQAPI::GetGroupList(robotQQ.c_str());
 	std::string groupListStr = groupList ? groupList : "";
 	if (groupListStr.empty()) return "";
 	try
@@ -1056,8 +1091,8 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 	}
 	catch (std::exception&)
 	{
-		XQ_outputLog(("警告, 获取群列表失败, 正在使用更慢的另一种方法尝试: "s + groupList).c_str());
-		const char* group = XQ_getGroupList_B(robotQQ.c_str());
+		XQAPI::OutPutLog(("警告, 获取群列表失败, 正在使用更慢的另一种方法尝试: "s + groupList).c_str());
+		const char* group = XQAPI::GetGroupList_B(robotQQ.c_str());
 		if (!group) return "";
 		std::string groupList = group;
 		Unpack p;
@@ -1072,7 +1107,7 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 			{
 				Unpack tmp;
 				tmp.add(atoll(item.c_str()));
-				const char* groupName = XQ_getGroupName(robotQQ.c_str(), item.c_str());
+				const char* groupName = XQAPI::GetGroupName(robotQQ.c_str(), item.c_str());
 				tmp.add(groupName ? groupName : "");
 				Groups.push_back(tmp);
 				count++;
@@ -1101,7 +1136,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 	if (disableCache || !GroupMemberCache.count(group) || (time(nullptr) - GroupMemberCache[group].second) > 3600)
 	{
 		newRetrieved = true;
-		const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+		const char* memberList = XQAPI::GetGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
 		memberListStr = memberList ? memberList : "";
 	}
 	else
@@ -1147,15 +1182,15 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 	}
 	catch (std::exception&)
 	{
-		XQ_outputLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
+		XQAPI::OutPutLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string grpStr = std::to_string(group);
 		std::string accStr = std::to_string(account);
 		Unpack p;
 		p.add(group);
 		p.add(account);
-		const char* nick = XQ_getNick(robotQQ.c_str(), accStr.c_str());
+		const char* nick = XQAPI::GetNick(robotQQ.c_str(), accStr.c_str());
 		p.add(nick ? nick : "");
-		const char* groupCard = XQ_getGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
+		const char* groupCard = XQAPI::GetGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
 		p.add(groupCard ? groupCard : "");
 		p.add(255);
 		p.add(-1);
@@ -1163,7 +1198,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		p.add(0);
 		p.add(0);
 		p.add("");
-		const char* admin = XQ_getGroupAdmin(robotQQ.c_str(), std::to_string(group).c_str());
+		const char* admin = XQAPI::GetGroupAdmin(robotQQ.c_str(), std::to_string(group).c_str());
 		std::string adminList = admin ? admin : "";
 		int count = 0;
 		int permissions = 1;
@@ -1195,7 +1230,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 {
 	static std::string ret;
-	const char* memberList = XQ_getGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
+	const char* memberList = XQAPI::GetGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
 	std::string memberListStr = memberList ? memberList : "";
 	try
 	{
@@ -1249,23 +1284,23 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 
 CQAPI(const char*, CQ_getCookiesV2, 8)(int32_t plugin_id, const char* domain)
 {
-	return XQ_getCookies(robotQQ.c_str());
+	return XQAPI::GetCookies(robotQQ.c_str());
 }
 
 CQAPI(const char*, CQ_getCsrfToken, 4)(int32_t plugin_id)
 {
-	return XQ_getBkn(robotQQ.c_str());
+	return XQAPI::GetBkn(robotQQ.c_str());
 }
 
 CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* image)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了未实现的API CQ_getImage").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_getImage").c_str());
 	return "";
 }
 
 CQAPI(const char*, CQ_getRecordV2, 12)(int32_t plugin_id, const char* file, const char* format)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了未实现的API CQ_getRecordV2").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_getRecordV2").c_str());
 	return "";
 }
 
@@ -1275,7 +1310,7 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	std::string accStr = std::to_string(account);
 	Unpack p;
 	p.add(account);
-	p.add(XQ_getNick(robotQQ.c_str(), accStr.c_str()));
+	p.add(XQAPI::GetNick(robotQQ.c_str(), accStr.c_str()));
 	p.add(255);
 	p.add(-1);
 	ret = base64_encode(p.getAll());
@@ -1284,7 +1319,7 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 
 CQAPI(int32_t, CQ_sendDiscussMsg, 16)(int32_t plugin_id, int64_t group, const char* msg)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了不支持的API CQ_sendDiscussMsg").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_sendDiscussMsg").c_str());
 	return 0;
 }
 
@@ -1293,20 +1328,20 @@ CQAPI(int32_t, CQ_sendLikeV2, 16)(int32_t plugin_id, int64_t account, int32_t ti
 	std::string accStr = std::to_string(account);
 	for (int i=0;i!=times;i++)
 	{
-		XQ_upVote(robotQQ.c_str(), accStr.c_str());
+		XQAPI::UpVote(robotQQ.c_str(), accStr.c_str());
 	}
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setDiscussLeave, 12)(int32_t plugin_id, int64_t group)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了不支持的API CQ_setDiscussLeave").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setDiscussLeave").c_str());
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setFriendAddRequest, 16)(int32_t plugin_id, const char* id, int32_t type, const char* remark)
 {
-	XQ_handleFriendEvent(robotQQ.c_str(), id, type == 1 ? 10 : 20, remark);
+	XQAPI::HandleFriendEvent(robotQQ.c_str(), id, type == 1 ? 10 : 20, remark);
 	return 0;
 }
 
@@ -1318,19 +1353,20 @@ CQAPI(int32_t, CQ_setGroupAddRequestV2, 20)(int32_t plugin_id, const char* id, i
 	std::string group = p.getstring();
 	std::string qq = p.getstring();
 	std::string raw = p.getstring();
-	XQ_handleGroupEvent(robotQQ.c_str(), eventType, qq.c_str(), group.c_str(), raw.c_str(), fb_type == 1 ? 10 : 20, reason);
+	XQAPI::HandleGroupEvent(robotQQ.c_str(), eventType, qq.c_str(), group.c_str(), raw.c_str(), fb_type == 1 ? 10 : 20, reason);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupAdmin, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL admin)
 {
-	XQ_setAdmin(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(account).c_str(), admin);
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setAdmin").c_str());
+	//XQAPI::SetAdmin(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(account).c_str(), admin);
 	return 0;
 }
 
 CQAPI(int32_t, CQ_setGroupAnonymousBan, 24)(int32_t plugin_id, int64_t group, const char* id, int64_t duration)
 {
-	XQ_outputLog((plugins[plugin_id].file + "调用了不支持的API CQ_setGroupAnonymousBan").c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setGroupAnonymousBan").c_str());
 	return 0;
 }
 
@@ -1367,7 +1403,7 @@ CQAPI(int32_t, CQ_addLog, 16)(int32_t plugin_id, int32_t priority, const char* t
 		level = "UNKNOWN";
 		break;
 	}
-	XQ_outputLog((plugins[plugin_id].file + ": [" + level + "] [" + type + "] " + content).c_str());
+	XQAPI::OutPutLog((plugins[plugin_id].file + ": [" + level + "] [" + type + "] " + content).c_str());
 	return 0;
 }
 
