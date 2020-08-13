@@ -121,13 +121,8 @@ namespace XQAPI
 #undef XQAPI
 }
 
-
-
 HMODULE XQHModule = nullptr;
 HMODULE CQPHModule = nullptr;
-
-// XQ根目录, 结尾不带斜杠
-std::string rootPath;
 
 int loadCQPlugin(const std::filesystem::path& file)
 {
@@ -226,6 +221,12 @@ int loadCQPlugin(const std::filesystem::path& file)
 		return 0;
 	}
 	
+	// 判断是否启用
+	fileCopy.replace_extension(".disable");
+	if (std::filesystem::exists(fileCopy))
+	{
+		plugin.enabled = false;
+	}
 	plugin.dll = dll;
 	plugins.push_back(plugin);
 	XQAPI::OutPutLog(("加载"s + file.filename().string() + "成功！").c_str());
@@ -406,9 +407,9 @@ CQAPI(const char*, OQ_Create, 0)()
 	}
 	
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.3\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.4\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.3}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.0.4}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
@@ -458,9 +459,6 @@ std::map<long long, std::pair<std::string, time_t>> GroupMemberCache;
 
 // 群列表缓存 用于获取群列表，缓存时间1小时，遇到群添加/退出等事件刷新
 std::pair<std::string, time_t> GroupListCache;
-
-// 启用事件是否已经被调用，用于在QQ登陆成功以后再调用启用事件
-bool EnabledEventCalled = false;
 
 #ifdef XQ
 CQAPI(int32_t, XQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
@@ -1172,9 +1170,9 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		t.add(j["members"].count("lst") ? j["members"]["lst"].get<int>() : 0);
 		t.add(j["members"].count("ll") ? (lvlName.count("lvln" + std::to_string(j["members"]["ll"].get<int>())) ? lvlName["lvln" + std::to_string(j["members"]["ll"].get<int>())] : "") : "");
 		t.add(account == owner ? 3 : (admin.count(account) ? 2 : 1));
+		t.add(FALSE);
 		t.add("");
 		t.add(-1);
-		t.add(FALSE);
 		t.add(TRUE);
 		ret = base64_encode(t.getAll());
 		if (newRetrieved) GroupMemberCache[group] = { memberListStr, time(nullptr) };
@@ -1218,9 +1216,9 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 			count++;
 		}
 		p.add(permissions);
+		p.add(FALSE);
 		p.add("");
 		p.add(0);
-		p.add(FALSE);
 		p.add(TRUE);
 		ret = base64_encode(p.getAll());
 		return ret.c_str();
@@ -1265,9 +1263,9 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			t.add(member.value().count("lst") ? member.value()["lst"].get<int>() : 0);
 			t.add(member.value().count("ll") ? (lvlName.count("lvln" + std::to_string(member.value()["ll"].get<int>())) ? lvlName["lvln" + std::to_string(member.value()["ll"].get<int>())]: "") : "");
 			t.add(qq == owner ? 3 : (admin.count(qq) ? 2 : 1));
+			t.add(FALSE);
 			t.add("");
 			t.add(-1);
-			t.add(FALSE);
 			t.add(TRUE);
 			p.add(t);
 		}

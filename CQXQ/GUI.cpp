@@ -10,9 +10,11 @@
 #include <type_traits>
 #include <memory>
 #include <utility>
+#include <fstream>
 
 #include "GlobalVar.h"
 #include "native.h"
+#include <filesystem>
 
 using namespace std;
 
@@ -502,9 +504,17 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				ButtonEnable.SetText("启用");
 				if (!plugins[SelectedIndex].events.count(CQ_eventDisable)) return 0;
 				const auto disable = IntMethod(plugins[SelectedIndex].events.at(CQ_eventDisable));
-				if (disable)
+				if (disable && EnabledEventCalled)
 				{
 					disable();
+				}
+				std::filesystem::path p(rootPath);
+				p.append("CQPlugins").append(plugins[SelectedIndex].file).replace_extension(".disable");
+				if (!std::filesystem::exists(p))
+				{
+					ofstream fstream(p); // 创建文件
+					fstream << "This file is used to disable the corresponding plugin";
+					fstream.close();
 				}
 			}
 			else
@@ -513,9 +523,15 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				ButtonEnable.SetText("停用");
 				if (!plugins[SelectedIndex].events.count(CQ_eventEnable)) return 0;
 				const auto enable = IntMethod(plugins[SelectedIndex].events.at(CQ_eventEnable));
-				if (enable)
+				if (enable && EnabledEventCalled)
 				{
 					enable();
+				}
+				std::filesystem::path p(rootPath);
+				p.append("CQPlugins").append(plugins[SelectedIndex].file).replace_extension(".disable");
+				if (std::filesystem::exists(p))
+				{
+					std::filesystem::remove(p);
 				}
 			}
 		}
@@ -525,6 +541,16 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			if (SelectedIndex == -1)
 			{
 				MessageBoxA(m_hwnd, "请先双击左侧列表选择一个插件!", "CQXQ", MB_OK);
+				return 0;
+			}
+			if (!plugins[SelectedIndex].enabled)
+			{
+				MessageBoxA(m_hwnd, "插件尚未启用，请先启用插件！", "CQXQ", MB_OK);
+				return 0;
+			}
+			if (!EnabledEventCalled)
+			{
+				MessageBoxA(m_hwnd, "插件尚未初始化完毕，等待QQ登陆完成后插件进行初始化！", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (plugins[SelectedIndex].menus.empty()) return 0;
