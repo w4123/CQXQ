@@ -7,6 +7,17 @@
 
 extern HMODULE hDllModule;
 
+struct eventType
+{
+	int plugin_id;
+	int priority = 30000;
+	FARPROC event = nullptr;
+	bool operator<(const eventType& that) const
+	{
+		return this->priority < that.priority;
+	}
+};
+
 struct native_plugin
 {
 	int id;
@@ -16,7 +27,7 @@ struct native_plugin
 	int version_id;
 	std::string author;
 	std::string description;
-	std::map<int, FARPROC> events;
+	std::map<int, eventType> events;
 	std::vector<std::pair<std::string, FARPROC>> menus;
 	HMODULE dll;
 	bool enabled;
@@ -30,7 +41,11 @@ struct native_plugin
 	}
 };
 
+// 存储所有插件
 extern std::vector<native_plugin> plugins;
+
+// 存储排序后的所有插件事件
+extern std::map<int, std::vector<eventType>> plugins_events;
 
 // XQ根目录, 结尾不带斜杠
 extern std::string rootPath;

@@ -177,6 +177,7 @@ int loadCQPlugin(const std::filesystem::path& file)
 			for(const auto& it : j["event"])
 			{
 				int type = it["type"].get<int>();
+				int priority = it.count("priority")? it["priority"].get<int>() : 30000;
 				FARPROC procAddress = nullptr;
 				if (it.count("function"))
 				{
@@ -189,7 +190,9 @@ int loadCQPlugin(const std::filesystem::path& file)
 				 
 				if (procAddress)
 				{
-					plugin.events[type] = procAddress;
+					auto e = eventType{ plugin.id, priority, procAddress };
+					plugin.events[type] = e;
+					plugins_events[type].push_back(e);
 				}
 				else
 				{
@@ -435,12 +438,18 @@ CQAPI(const char*, OQ_Create, 0)()
 	// 加载CQ插件
 	std::string ppath = rootPath + "\\CQPlugins\\";
 	std::filesystem::create_directories(ppath);
-	for(const auto& file : std::filesystem::directory_iterator(ppath))
+	for (const auto& file : std::filesystem::directory_iterator(ppath))
 	{
 		if (file.is_regular_file() && file.path().extension() == ".dll")
 		{
 			loadCQPlugin(file);
 		}
+	}
+
+	// 按照优先级排序
+	for (auto& ele : plugins_events)
+	{
+		std::sort(ele.second.begin(), ele.second.end());
 	}
 
 	// 延迟字符串内存释放
@@ -481,10 +490,9 @@ CQAPI(int32_t, XQ_DestroyPlugin, 0)()
 CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 #endif
 {
-	for (const auto& plugin : plugins)
+	for (const auto& plugin : plugins_events[CQ_eventExit])
 	{
-		if (!plugin.events.count(CQ_eventExit)) continue;
-		const auto exit = IntMethod(plugin.events.at(CQ_eventExit));
+		const auto exit = IntMethod(plugin.event);
 		if (exit)
 		{
 			exit();
@@ -540,10 +548,9 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (!botQQStr.empty() && robotQQ != botQQStr) return 0;
 		if (msgType == XQ_Load)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventStartup])
 			{
-				if (!plugin.events.count(CQ_eventStartup)) continue;
-				const auto startup = IntMethod(plugin.events.at(CQ_eventStartup));
+				const auto startup = IntMethod(plugin.event);
 				if (startup)
 				{
 					startup();
@@ -558,11 +565,10 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 
 			if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
 			{
-				for (const auto& plugin : plugins)
+				for (const auto& plugin : plugins_events[CQ_eventEnable])
 				{
-					if (!plugin.enabled) continue;
-					if (!plugin.events.count(CQ_eventEnable)) continue;
-					const auto enable = IntMethod(plugin.events.at(CQ_eventEnable));
+					if (!plugins[plugin.plugin_id].enabled) continue;
+					const auto enable = IntMethod(plugin.event);
 					if (enable)
 					{
 						enable();
@@ -576,11 +582,10 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		{
 			if (!EnabledEventCalled && XQAPI::IsEnable())
 			{
-				for (const auto& plugin : plugins)
+				for (const auto& plugin : plugins_events[CQ_eventEnable])
 				{
-					if (!plugin.enabled) continue;
-					if (!plugin.events.count(CQ_eventEnable)) continue;
-					const auto enable = IntMethod(plugin.events.at(CQ_eventEnable));
+					if (!plugins[plugin.plugin_id].enabled) continue;
+					const auto enable = IntMethod(plugin.event);
 					if (enable)
 					{
 						enable();
@@ -594,11 +599,10 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		{
 			if (!EnabledEventCalled) return 0;
 			EnabledEventCalled = false;
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventDisable])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventDisable)) continue;
-				const auto disable = IntMethod(plugin.events.at(CQ_eventDisable));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto disable = IntMethod(plugin.event);
 				if (disable)
 				{
 					disable();
@@ -608,14 +612,13 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_FriendMsgEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-				const auto privMsg = EvPriMsg(plugin.events.at(CQ_eventPrivateMsg));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto privMsg = EvPriMsg(plugin.event);
 				if (privMsg)
 				{
-					privMsg(11, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
+					if (privMsg(11, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 			return 0;
@@ -623,28 +626,26 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_GroupTmpMsgEvent)
 		{
 			UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-				const auto privMsg = EvPriMsg(plugin.events.at(CQ_eventPrivateMsg));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto privMsg = EvPriMsg(plugin.event);
 				if (privMsg)
 				{
-					privMsg(2, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
+					if (privMsg(2, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 		}
 		if (msgType == XQ_GroupMsgEvent)
 		{
 			UserGroupCache[stoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventGroupMsg])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventGroupMsg)) continue;
-				const auto groupMsg = EvGroupMsg(plugin.events.at(CQ_eventGroupMsg));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto groupMsg = EvGroupMsg(plugin.event);
 				if (groupMsg)
 				{
-					groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0);
+					if (groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 			return 0;
@@ -652,39 +653,36 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_DiscussTmpMsgEvent)
 		{
 			UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
-				const auto privMsg = EvPriMsg(plugin.events.at(CQ_eventPrivateMsg));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto privMsg = EvPriMsg(plugin.event);
 				if (privMsg)
 				{
-					privMsg(3, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
+					if (privMsg(3, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 		}
 		if (msgType == XQ_DiscussMsgEvent)
 		{
 			UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventDiscussMsg])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventDiscussMsg)) continue;
-				const auto event = EvDiscussMsg(plugin.events.at(CQ_eventDiscussMsg));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto event = EvDiscussMsg(plugin.event);
 				if (event)
 				{
-					event(1, 0, atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
+					if (event(1, 0, atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupInviteReqEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-				const auto invited = EvRequestAddGroup(plugin.events.at(CQ_eventRequest_AddGroup));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto invited = EvRequestAddGroup(plugin.event);
 				if (invited)
 				{
 					Unpack p;
@@ -692,18 +690,17 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					invited(2, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
+					if (invited(2, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupAddReqEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-				const auto addReq = EvRequestAddGroup(plugin.events.at(CQ_eventRequest_AddGroup));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto addReq = EvRequestAddGroup(plugin.event);
 				if (addReq)
 				{
 					Unpack p;
@@ -711,18 +708,17 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
+					if (addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupInviteOtherReqEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventRequest_AddGroup)) continue;
-				const auto addReq = EvRequestAddGroup(plugin.events.at(CQ_eventRequest_AddGroup));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto addReq = EvRequestAddGroup(plugin.event);
 				if (addReq)
 				{
 					Unpack p;
@@ -730,21 +726,20 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str());
+					if (addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_FriendAddReqEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventRequest_AddFriend])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventRequest_AddFriend)) continue;
-				const auto addReq = EvRequestAddFriend(plugin.events.at(CQ_eventRequest_AddFriend));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto addReq = EvRequestAddFriend(plugin.event);
 				if (addReq)
 				{
-					addReq(1, 0, atoll(activeQQ), msg, activeQQ);
+					if (addReq(1, 0, atoll(activeQQ), msg, activeQQ)) break;
 				}
 			}
 			return 0;
@@ -753,56 +748,52 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		{
 			// TODO: 禁言时间
 			XQAPI::OutPutLog(msg);
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					ban(2, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60);
+					if (ban(2, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60)) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupUnbanEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					ban(1, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0);
+					if (ban(1, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0)) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupWholeBanEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0);
+					if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0)) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupWholeUnbanEvent)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupBan)) continue;
-				const auto ban = EvGroupBan(plugin.events.at(CQ_eventSystem_GroupBan));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					ban(1, 0, atoll(sourceId), atoll(activeQQ), 0, 0);
+					if (ban(1, 0, atoll(sourceId), atoll(activeQQ), 0, 0)) break;
 				}
 			}
 			return 0;
@@ -810,14 +801,13 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_GroupMemberIncreaseByApply)
 		{
 			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberIncrease])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
-				const auto MbrInc = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberIncrease));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto MbrInc = EvGroupMember(plugin.event);
 				if (MbrInc)
 				{
-					MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+					if (MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
 				}
 			}
 			return 0;
@@ -825,14 +815,13 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_GroupMemberIncreaseByInvite)
 		{
 			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberIncrease])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupMemberIncrease)) continue;
-				const auto MbrInc = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberIncrease));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto MbrInc = EvGroupMember(plugin.event);
 				if (MbrInc)
 				{
-					MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+					if (MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
 				}
 			}
 			return 0;
@@ -840,14 +829,13 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_GroupMemberDecreaseByExit)
 		{
 			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberDecrease])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
-				const auto event = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberDecrease));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto event = EvGroupMember(plugin.event);
 				if (event)
 				{
-					event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ));
+					if (event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ)))  break;
 				}
 			}
 			return 0;
@@ -855,43 +843,46 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		if (msgType == XQ_GroupMemberDecreaseByKick)
 		{
 			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberDecrease])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupMemberDecrease)) continue;
-				const auto event = EvGroupMember(plugin.events.at(CQ_eventSystem_GroupMemberDecrease));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto event = EvGroupMember(plugin.event);
 				if (event)
 				{
-					if (passiveQQ == robotQQ) event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
-					else event(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ));
+					if (passiveQQ == robotQQ)
+					{
+						if (event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
+					}
+					else
+					{
+						if (event(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
+					}
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupAdminSet)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
-				const auto event = EvGroupAdmin(plugin.events.at(CQ_eventSystem_GroupAdmin));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto event = EvGroupAdmin(plugin.event);
 				if (event)
 				{
-					event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
+					if (event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ))) break;
 				}
 			}
 			return 0;
 		}
 		if (msgType == XQ_GroupAdminUnset)
 		{
-			for (const auto& plugin : plugins)
+			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
 			{
-				if (!plugin.enabled) continue;
-				if (!plugin.events.count(CQ_eventSystem_GroupAdmin)) continue;
-				const auto event = EvGroupAdmin(plugin.events.at(CQ_eventSystem_GroupAdmin));
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto event = EvGroupAdmin(plugin.event);
 				if (event)
 				{
-					event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ));
+					if (event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ))) break;
 				}
 			}
 			return 0;
