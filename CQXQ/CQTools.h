@@ -16,5 +16,3 @@ std::string& msg_encode(std::string& s, bool isCQ = false);
 //CQcode½âÂë
 std::string& msg_decode(std::string& s, bool isCQ = false);
 
-std::string UTF8toGBK(const std::string& strUTF8);
-

@@ -17,6 +17,7 @@
 #include "GlobalVar.h"
 #include "GUI.h"
 #include "resource.h"
+#include "EncodingConvert.h"
 
 using namespace std;
 
@@ -146,18 +147,18 @@ int loadCQPlugin(const std::filesystem::path& file)
 		try
 		{
 			nlohmann::json j = nlohmann::json::parse(jsonstream, nullptr, true, true);
-			plugin.name = UTF8toGBK(j["name"].get<std::string>());
-			plugin.version = UTF8toGBK(j["version"].get<std::string>());
+			plugin.name = UTF8toGB18030(j["name"].get<std::string>());
+			plugin.version = UTF8toGB18030(j["version"].get<std::string>());
 			j["version_id"].get_to(plugin.version_id);
-			plugin.author = UTF8toGBK(j["author"].get<std::string>());
-			plugin.description = UTF8toGBK(j["description"].get<std::string>());
+			plugin.author = UTF8toGB18030(j["author"].get<std::string>());
+			plugin.description = UTF8toGB18030(j["description"].get<std::string>());
 			for(const auto& it : j["event"])
 			{
 				int type = it["type"].get<int>();
 				FARPROC procAddress = nullptr;
 				if (it.count("function"))
 				{
-					procAddress = GetProcAddress(dll, UTF8toGBK(it["function"].get<std::string>()).c_str());
+					procAddress = GetProcAddress(dll, UTF8toGB18030(it["function"].get<std::string>()).c_str());
 				}
 				else if (it.count("offset"))
 				{
@@ -178,7 +179,7 @@ int loadCQPlugin(const std::filesystem::path& file)
 				FARPROC procAddress = nullptr;
 				if (it.count("function"))
 				{
-					procAddress = GetProcAddress(dll, UTF8toGBK(it["function"].get<std::string>()).c_str());
+					procAddress = GetProcAddress(dll, UTF8toGB18030(it["function"].get<std::string>()).c_str());
 				}
 				else if (it.count("offset"))
 				{
@@ -186,11 +187,11 @@ int loadCQPlugin(const std::filesystem::path& file)
 				}
 				if (procAddress)
 				{
-					plugin.menus.push_back({ UTF8toGBK(it["name"].get<std::string>()), procAddress });
+					plugin.menus.push_back({ UTF8toGB18030(it["name"].get<std::string>()), procAddress });
 				}
 				else
 				{
-					XQAPI::OutPutLog(("加载" + file.filename().string() + "的菜单" + UTF8toGBK(it["name"].get<std::string>()) + "时失败! 请检查json文件是否正确!").c_str());
+					XQAPI::OutPutLog(("加载" + file.filename().string() + "的菜单" + UTF8toGB18030(it["name"].get<std::string>()) + "时失败! 请检查json文件是否正确!").c_str());
 				}
 				
 			}
@@ -1062,21 +1063,21 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 		{
 			Unpack t;
 			t.add(group["gc"].get<long long>());
-			t.add(UTF8toGBK(group["gn"].get<std::string>()));
+			t.add(UTF8toGB18030(group["gn"].get<std::string>()));
 			Groups.push_back(t);
 		}
 		for (const auto& group : j["join"])
 		{
 			Unpack t;
 			t.add(group["gc"].get<long long>());
-			t.add(UTF8toGBK(group["gn"].get<std::string>()));
+			t.add(UTF8toGB18030(group["gn"].get<std::string>()));
 			Groups.push_back(t);
 		}
 		for (const auto& group : j["manage"])
 		{
 			Unpack t;
 			t.add(group["gc"].get<long long>());
-			t.add(UTF8toGBK(group["gn"].get<std::string>()));
+			t.add(UTF8toGB18030(group["gn"].get<std::string>()));
 			Groups.push_back(t);
 		}
 		p.add(static_cast<int>(Groups.size()));
@@ -1155,14 +1156,14 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		std::map<std::string, std::string> lvlName = j["levelname"].get<std::map<std::string, std::string>>();
 		for (auto& item : lvlName)
 		{
-			lvlName[item.first] = UTF8toGBK(item.second);
+			lvlName[item.first] = UTF8toGB18030(item.second);
 		}
 		if (!j["members"].count(std::to_string(account))) return "";
 		Unpack t;
 		t.add(group);
 		t.add(account);
-		t.add(j["members"].count("nk") ? UTF8toGBK(j["members"]["nk"].get<std::string>()) : "");
-		t.add(j["members"].count("cd") ? UTF8toGBK(j["members"]["cd"].get<std::string>()) : "");
+		t.add(j["members"].count("nk") ? UTF8toGB18030(j["members"]["nk"].get<std::string>()) : "");
+		t.add(j["members"].count("cd") ? UTF8toGB18030(j["members"]["cd"].get<std::string>()) : "");
 		t.add(255);
 		t.add(-1);
 		t.add("");
@@ -1245,7 +1246,7 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 		std::map<std::string, std::string> lvlName = j["levelname"].get<std::map<std::string, std::string>>();
 		for (auto& item : lvlName)
 		{
-			lvlName[item.first] = UTF8toGBK(item.second);
+			lvlName[item.first] = UTF8toGB18030(item.second);
 		}
 		p.add(mem_num);
 		for (const auto& member : j["members"].items())
@@ -1254,8 +1255,8 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			Unpack t;
 			t.add(group);
 			t.add(qq);
-			t.add(member.value().count("nk") ? UTF8toGBK(member.value()["nk"].get<std::string>()) : "");
-			t.add(member.value().count("cd") ? UTF8toGBK(member.value()["cd"].get<std::string>()) : "");
+			t.add(member.value().count("nk") ? UTF8toGB18030(member.value()["nk"].get<std::string>()) : "");
+			t.add(member.value().count("cd") ? UTF8toGB18030(member.value()["cd"].get<std::string>()) : "");
 			t.add(255);
 			t.add(-1);
 			t.add("");

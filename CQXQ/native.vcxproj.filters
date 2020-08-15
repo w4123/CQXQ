@@ -39,6 +39,9 @@
     <ClInclude Include="resource.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="EncodingConvert.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="native.cpp">
@@ -56,6 +59,9 @@
     <ClCompile Include="GlobalVar.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="EncodingConvert.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc">
@@ -66,5 +72,6 @@
     <None Include="CQP.dll">
       <Filter>资源文件</Filter>
     </None>
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

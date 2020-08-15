@@ -145,16 +145,3 @@ std::string& msg_decode(std::string& s, const bool isCQ)
 }
 
 
-std::string UTF8toGBK(const std::string& strUTF8)
-{
-	const int UTF16len = MultiByteToWideChar(CP_UTF8, 0, strUTF8.c_str(), -1, nullptr, 0);
-	auto* const strUTF16 = new wchar_t[UTF16len];
-	MultiByteToWideChar(CP_UTF8, 0, strUTF8.c_str(), -1, strUTF16, UTF16len);
-	const int GBKlen = WideCharToMultiByte(CP_GBK, 0, strUTF16, -1, nullptr, 0, nullptr, nullptr);
-	auto* const strGBK = new char[GBKlen];
-	WideCharToMultiByte(CP_GBK, 0, strUTF16, -1, strGBK, GBKlen, nullptr, nullptr);
-	std::string strOutGBK(strGBK);
-	delete[] strUTF16;
-	delete[] strGBK;
-	return strOutGBK;
-}
