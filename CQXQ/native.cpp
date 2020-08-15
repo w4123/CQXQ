@@ -307,12 +307,24 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 			}
 			else
 			{
-				std::string ppath = rootPath + "\\data\\image\\";
-				ppath += msgStr.substr(l + 15, r - l - 15);
+				std::string image;
+				image += msgStr.substr(l + 15, r - l - 15);
+				if (image.substr(0, 4) != "http" && image.substr(0, 3) != "ftp")
+				{
+					image = rootPath + "\\data\\image\\" + image;
+				}
 				ret += "[pic=";
-				ret += ppath;
+				ret += image;
 				ret += "]";
 			}
+		}
+		else if (msgStr.substr(l, 14) == "[CQ:image,url=")
+		{
+			std::string image;
+			image += msgStr.substr(l + 14, r - l - 14);
+			ret += "[pic=";
+			ret += image;
+			ret += "]";
 		}
 		else if (msgStr.substr(l, 16) == "[CQ:record,file=")
 		{
