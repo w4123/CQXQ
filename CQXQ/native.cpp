@@ -887,6 +887,20 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			}
 			return 0;
 		}
+		// 根据酷Q逻辑，只有不经过酷Q处理的好友添加事件（即比如用户设置了同意一切好友请求）才会调用好友已添加事件
+		if (msgType == XQ_FriendAddedEvent)
+		{
+			for (const auto& plugin : plugins_events[CQ_eventFriend_Add])
+			{
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto event = EvFriendAdd(plugin.event);
+				if (event)
+				{
+					if (event(1, atoi(timeStamp), atoll(activeQQ))) break;
+				}
+			}
+			return 0;
+		}
 		if (msgType == XQ_groupCardChange)
 		{
 			GroupMemberCache.erase(atoll(sourceId));
