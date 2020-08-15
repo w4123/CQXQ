@@ -139,6 +139,8 @@ namespace XQAPI
 	XQAPI(GetCookies, const char*, const char* botQQ)
 
 	XQAPI(GetBkn, const char*, const char* botQQ)
+
+	XQAPI(GetVoiLink, const char*, const char* botQQ, const char* GUID)
 #undef XQAPI
 }
 
@@ -1361,8 +1363,14 @@ CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* image)
 
 CQAPI(const char*, CQ_getRecordV2, 12)(int32_t plugin_id, const char* file, const char* format)
 {
-	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_getRecordV2").c_str());
-	return "";
+	if (!file) return "";
+	std::string fileStr(file);
+	if (fileStr.empty()) return "";
+	if (fileStr.substr(0, 16) == "[CQ:record,file=")
+	{
+		fileStr = "[Voi=" + fileStr.substr(16, fileStr.length() - 1 - 16) + "]";
+	}
+	return XQAPI::GetVoiLink(robotQQ.c_str(), fileStr.c_str());
 }
 
 CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, BOOL cache)
