@@ -291,6 +291,12 @@ std::string parseToCQCode(const char* msg)
 			ret += msgStr.substr(l + 5, r - l - 5);
 			ret += "]";
 		}
+		else if (msgStr.substr(l, 5) == "[Face")
+		{
+			ret += "[CQ:face,id=";
+			ret += msgStr.substr(l + 5, r - l - 5 - 4);
+			ret += "]";
+		}
 		else
 		{
 			ret += msgStr.substr(l, r - l + 1);
@@ -367,6 +373,12 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 				ret += ppath;
 				ret += "]";
 			}
+		}
+		else if (msgStr.substr(l, 12) == "[CQ:face,id=")
+		{
+			ret += "[Face";
+			ret += msgStr.substr(l + 12, r - l - 12);
+			ret += ".gif]";
 		}
 		else
 		{

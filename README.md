@@ -55,6 +55,7 @@ CQ码
 - [x] at
 - [x] image(file或者URL)
 - [x] record
+- [x] face
 - [ ] 其他
 
 GUI及管理
