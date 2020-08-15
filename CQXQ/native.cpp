@@ -884,7 +884,7 @@ CQAPI(int32_t, CQ_canSendImage, 4)(int32_t)
 
 CQAPI(int32_t, CQ_canSendRecord, 4)(int32_t)
 {
-	return 0;
+	return 1;
 }
 
 
