@@ -517,7 +517,10 @@ CQAPI(int32_t, OQ_SetUp, 0)()
 }
 
 // QQ-群号 缓存 用于发送消息
-std::map<std::string, std::string> UserGroupCache;
+std::map<int64_t, int64_t> UserGroupCache;
+
+// QQ-讨论组号 缓存 用于发送消息
+std::map<int64_t, int64_t> UserDiscussCache;
 
 // 群-群成员json字符串缓存 用于获取群成员列表，群成员信息，缓存时间1小时，遇到群成员变动事件/群名片更改事件刷新
 std::map<long long, std::pair<std::string, time_t>> GroupMemberCache;
@@ -619,7 +622,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupTmpMsgEvent)
 		{
-			UserGroupCache[activeQQ] = sourceId;
+			UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -633,7 +636,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupMsgEvent)
 		{
-			UserGroupCache[activeQQ] = sourceId;
+			UserGroupCache[stoll(activeQQ)] = atoll(sourceId);
 			for (const auto& plugin : plugins)
 			{
 				if (!plugin.enabled) continue;
@@ -642,6 +645,35 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				if (groupMsg)
 				{
 					groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0);
+				}
+			}
+			return 0;
+		}
+		if (msgType == XQ_DiscussTmpMsgEvent)
+		{
+			UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventPrivateMsg)) continue;
+				const auto privMsg = EvPriMsg(plugin.events.at(CQ_eventPrivateMsg));
+				if (privMsg)
+				{
+					privMsg(3, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
+				}
+			}
+		}
+		if (msgType == XQ_DiscussMsgEvent)
+		{
+			UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+			for (const auto& plugin : plugins)
+			{
+				if (!plugin.enabled) continue;
+				if (!plugin.events.count(CQ_eventDiscussMsg)) continue;
+				const auto event = EvDiscussMsg(plugin.events.at(CQ_eventDiscussMsg));
+				if (event)
+				{
+					event(1, 0, atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0);
 				}
 			}
 			return 0;
@@ -892,16 +924,20 @@ CQAPI(int32_t, CQ_canSendRecord, 4)(int32_t)
 
 CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const char* msg)
 {
-	if (robotQQ.empty()) return 1;
+	if (robotQQ.empty()) return -1;
 	std::string accStr = std::to_string(account);
 	
 	if (XQAPI::IfFriend(robotQQ.c_str(), accStr.c_str()))
 	{
 		XQAPI::SendMsg(robotQQ.c_str(), 1, accStr.c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
 	}
-	else if (UserGroupCache.count(accStr))
+	else if (UserGroupCache.count(account))
 	{
-		XQAPI::SendMsg(robotQQ.c_str(), 4, UserGroupCache[accStr].c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
+		XQAPI::SendMsg(robotQQ.c_str(), 4, std::to_string(UserGroupCache[account]).c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
+	}
+	else if (UserDiscussCache.count(account))
+	{
+		XQAPI::SendMsg(robotQQ.c_str(), 5, std::to_string(UserDiscussCache[account]).c_str(), accStr.c_str(), parseFromCQCode(1, accStr.c_str(), msg).c_str(), 0);
 	}
 	else
 	{
@@ -913,7 +949,7 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 
 CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char* msg)
 {
-	if (robotQQ.empty()) return 1;
+	if (robotQQ.empty()) return -1;
 	std::string grpStr = std::to_string(group);
 	XQAPI::SendMsg(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0);
 	return 0;
@@ -1386,9 +1422,11 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	return delayMemFreeCStr(ret.c_str());
 }
 
-CQAPI(int32_t, CQ_sendDiscussMsg, 16)(int32_t plugin_id, int64_t group, const char* msg)
+CQAPI(int32_t, CQ_sendDiscussMsg, 16)(int32_t plugin_id, int64_t discuss, const char* msg)
 {
-	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_sendDiscussMsg").c_str());
+	if (robotQQ.empty()) return -1;
+	std::string discussStr = std::to_string(discuss);
+	XQAPI::SendMsg(robotQQ.c_str(), 3, discussStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, discussStr.c_str(), msg).c_str(), 0);
 	return 0;
 }
 
@@ -1402,7 +1440,7 @@ CQAPI(int32_t, CQ_sendLikeV2, 16)(int32_t plugin_id, int64_t account, int32_t ti
 	return 0;
 }
 
-CQAPI(int32_t, CQ_setDiscussLeave, 12)(int32_t plugin_id, int64_t group)
+CQAPI(int32_t, CQ_setDiscussLeave, 12)(int32_t plugin_id, int64_t discuss)
 {
 	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setDiscussLeave").c_str());
 	return 0;
