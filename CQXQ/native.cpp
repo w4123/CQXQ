@@ -141,6 +141,8 @@ namespace XQAPI
 	XQAPI(GetBkn, const char*, const char* botQQ)
 
 	XQAPI(GetVoiLink, const char*, const char* botQQ, const char* GUID)
+
+	XQAPI(WithdrawMsg, const char*, const char* botQQ, const char* groupId, const char* msgNum, const char* msgId)
 #undef XQAPI
 }
 
@@ -548,6 +550,13 @@ std::map<long long, std::pair<std::string, time_t>> GroupMemberCache;
 // 群列表缓存 用于获取群列表，缓存时间1小时，遇到群添加/退出等事件刷新
 std::pair<std::string, time_t> GroupListCache;
 
+struct FakeMsgId
+{
+	long long groupId;
+	long long msgNum;
+	long long msgId;
+};
+
 #ifdef XQ
 CQAPI(int32_t, XQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 #else
@@ -630,7 +639,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto privMsg = EvPriMsg(plugin.event);
 				if (privMsg)
 				{
-					if (privMsg(11, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+					if (privMsg(11, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 			return 0;
@@ -644,7 +653,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto privMsg = EvPriMsg(plugin.event);
 				if (privMsg)
 				{
-					if (privMsg(2, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+					if (privMsg(2, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 		}
@@ -657,7 +666,8 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto groupMsg = EvGroupMsg(plugin.event);
 				if (groupMsg)
 				{
-					if (groupMsg(1, 0, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
+					FakeMsgId id{ atoll(sourceId), atoll(msgNum), atoll(msgId) };
+					if (groupMsg(1, (int32_t)&id, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 			return 0;
@@ -671,7 +681,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto privMsg = EvPriMsg(plugin.event);
 				if (privMsg)
 				{
-					if (privMsg(3, 0, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+					if (privMsg(3, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 		}
@@ -684,7 +694,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto event = EvDiscussMsg(plugin.event);
 				if (event)
 				{
-					if (event(1, 0, atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+					if (event(1, atoi(msgId), atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
 				}
 			}
 			return 0;
@@ -959,9 +969,10 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 	else
 	{
 		XQAPI::OutPutLog(("无法发送消息给QQ" + accStr + ": 找不到可用的发送路径").c_str());
+		return 0;
 	}
-	
-	return 0;
+	// 正常应该返回消息ID, 但是XQ不支持, 所以返回1作为消息ID
+	return 1;
 }
 
 CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char* msg)
@@ -969,7 +980,8 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 	if (robotQQ.empty()) return -1;
 	std::string grpStr = std::to_string(group);
 	XQAPI::SendMsg(robotQQ.c_str(), 2, grpStr.c_str(), robotQQ.c_str(), parseFromCQCode(2, grpStr.c_str(), msg).c_str(), 0);
-	return 0;
+	// 正常应该返回消息ID, 但是XQ不支持, 所以返回1作为消息ID
+	return 1;
 }
 
 CQAPI(int32_t, CQ_setFatal, 8)(int32_t plugin_id, const char* info)
@@ -1044,7 +1056,21 @@ CQAPI(int32_t, CQ_setGroupWholeBan, 16)(int32_t plugin_id, int64_t group, BOOL e
 
 CQAPI(int32_t, CQ_deleteMsg, 12)(int32_t plugin_id, int64_t msg_id)
 {
-	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_deleteMsg").c_str());
+	// 由于发送消息时返回的MsgId为1，这里用来防止插件利用这个MsgId来尝试撤回自己的消息
+	if ((int32_t)msg_id == 1)
+	{
+		XQAPI::OutPutLog((plugins[plugin_id].file + "调用 CQ_deleteMsg 时使用了不支持的方法: 尝试利用发送消息时的MsgId撤回自己发送的消息").c_str());
+		return -1;
+	}
+	if (IsBadReadPtr((void*)(int32_t(msg_id)), sizeof(FakeMsgId)))
+	{
+		XQAPI::OutPutLog((plugins[plugin_id].file + "调用 CQ_deleteMsg 时发送了无效的参数").c_str());
+		return -1;
+	}
+	XQAPI::WithdrawMsg(robotQQ.c_str(), std::to_string(((FakeMsgId*)(int32_t(msg_id)))->groupId).c_str(),
+		std::to_string(((FakeMsgId*)(int32_t(msg_id)))->msgNum).c_str(),
+		std::to_string(((FakeMsgId*)(int32_t(msg_id)))->msgId).c_str());
+	//XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_deleteMsg").c_str());
 	return 0;
 }
 
