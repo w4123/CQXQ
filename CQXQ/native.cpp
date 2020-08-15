@@ -27,6 +27,26 @@ std::string robotQQ;
 
 ctpl::thread_pool p(4);
 
+// 用于释放内存
+std::priority_queue<std::pair<std::time_t, const char*>> memFreeQueue;
+
+std::mutex memFreeMutex;
+
+std::unique_ptr<std::thread> memFreeThread;
+
+std::atomic<bool> memFreeThreadShouldRun = false;
+
+// 复制字符串, 返回复制后的字符串指针，字符串内存5分钟后释放
+const char* delayMemFreeCStr(const std::string& str)
+{
+	const char* s = _strdup(str.c_str());
+	{
+		std::unique_lock lock(memFreeMutex);
+		memFreeQueue.push({ time(nullptr), s });
+	}
+	return s;
+}
+
 namespace XQAPI
 {
 	static vector<function<void(HMODULE)>> apiFuncInitializers;
@@ -369,10 +389,12 @@ CQAPI(const char*, XQ_Create, 4)(const char* ver)
 CQAPI(const char*, OQ_Create, 0)()
 #endif
 {
+	// 获取文件目录
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string pathStr(path);
 	rootPath = pathStr.substr(0, pathStr.rfind("\\"));
+
 	// 载入API DLL并加载API函数
 #ifdef XQ
 	XQHModule = LoadLibraryA("xqapi.dll");
@@ -418,7 +440,32 @@ CQAPI(const char*, OQ_Create, 0)()
 			loadCQPlugin(file);
 		}
 	}
-	
+
+	// 延迟字符串内存释放
+	memFreeThreadShouldRun = true;
+	memFreeThread = std::make_unique<std::thread>([]
+	{
+		while (memFreeThreadShouldRun)
+		{
+			{
+				std::unique_lock lock(memFreeMutex);
+				// 延迟5分钟释放字符串内存
+				while (!memFreeQueue.empty() && time(nullptr) - memFreeQueue.top().first > 300)
+				{
+					free((void*)memFreeQueue.top().second);
+					memFreeQueue.pop();
+				}
+			}
+			std::this_thread::sleep_for(1s);
+		}
+		// 在线程退出时释放掉所有内存
+		std::unique_lock lock(memFreeMutex);
+		while (!memFreeQueue.empty())
+		{
+			free((void*)memFreeQueue.top().second);
+			memFreeQueue.pop();
+		}
+	});
 #ifdef XQ
 	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.4\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
@@ -443,6 +490,9 @@ CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 	}
 	FreeLibrary(XQHModule);
 	FreeLibrary(CQPHModule);
+	memFreeThreadShouldRun = false;
+	memFreeThread->join();
+	memFreeThread.reset(nullptr);
 	return 0;
 }
 
@@ -875,13 +925,13 @@ CQAPI(int32_t, CQ_setFatal, 8)(int32_t plugin_id, const char* info)
 
 CQAPI(const char*, CQ_getAppDirectory, 4)(int32_t plugin_id)
 {
-	static std::string ppath;
+	std::string ppath;
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string pathStr(path);
 	ppath = pathStr.substr(0, pathStr.rfind('\\')) + "\\CQPlugins\\config\\" + plugins[plugin_id].file + "\\";
 	std::filesystem::create_directories(ppath);
-	return ppath.c_str();
+	return delayMemFreeCStr(ppath.c_str());
 }
 
 CQAPI(int64_t, CQ_getLoginQQ, 4)(int32_t plugin_id)
@@ -945,7 +995,7 @@ CQAPI(int32_t, CQ_deleteMsg, 12)(int32_t plugin_id, int64_t msg_id)
 
 CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 {
-	static std::string ret;
+	std::string ret;
 	const char* frdLst = XQAPI::GetFriendList_B(robotQQ.c_str());
 	if (!frdLst) return "";
 	std::string friendList = frdLst;
@@ -977,12 +1027,12 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 		p.add(g);
 	}
 	ret = base64_encode(p.getAll());
-	return ret.c_str();
+	return delayMemFreeCStr(ret.c_str());
 }
 
 CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL disableCache)
 {
-	static std::string ret;
+	std::string ret;
 
 	// 判断是否是新获取的列表
 	bool newRetrieved = false;
@@ -1028,7 +1078,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 		p.add(friendNum);
 		ret = base64_encode(p.getAll());
 		if (newRetrieved) GroupMemberCache[group] = { memberListStr, time(nullptr) };
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 	catch (std::exception&)
 	{
@@ -1055,13 +1105,13 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 		p.add(maxNum);
 		p.add(0); // 这种方式暂不支持好友人数
 		ret = base64_encode(p.getAll());
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 }
 
 CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 {
-	static std::string ret;
+	std::string ret;
 
 	const char* groupList = XQAPI::GetGroupList(robotQQ.c_str());
 	std::string groupListStr = groupList ? groupList : "";
@@ -1098,7 +1148,7 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 			p.add(group);
 		}
 		ret = base64_encode(p.getAll());
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 	catch (std::exception&)
 	{
@@ -1132,13 +1182,13 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 			p.add(g);
 		}
 		ret = base64_encode(p.getAll());
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 }
 
 CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL disableCache)
 {
-	static std::string ret;
+	std::string ret;
 	// 判断是否是新获取的列表
 	bool newRetrieved = false;
 	std::string memberListStr;
@@ -1189,7 +1239,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		t.add(TRUE);
 		ret = base64_encode(t.getAll());
 		if (newRetrieved) GroupMemberCache[group] = { memberListStr, time(nullptr) };
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 	catch (std::exception&)
 	{
@@ -1234,13 +1284,13 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		p.add(0);
 		p.add(TRUE);
 		ret = base64_encode(p.getAll());
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 }
 
 CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 {
-	static std::string ret;
+	std::string ret;
 	const char* memberList = XQAPI::GetGroupMemberList_B(robotQQ.c_str(), std::to_string(group).c_str());
 	std::string memberListStr = memberList ? memberList : "";
 	try
@@ -1284,7 +1334,7 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 		}
 		GroupMemberCache[group] = { memberListStr, time(nullptr) };
 		ret = base64_encode(p.getAll());
-		return ret.c_str();
+		return delayMemFreeCStr(ret.c_str());
 	}
 	catch (std::exception&)
 	{
@@ -1317,7 +1367,7 @@ CQAPI(const char*, CQ_getRecordV2, 12)(int32_t plugin_id, const char* file, cons
 
 CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, BOOL cache)
 {
-	static std::string ret;
+	std::string ret;
 	std::string accStr = std::to_string(account);
 	Unpack p;
 	p.add(account);
@@ -1325,7 +1375,7 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	p.add(255);
 	p.add(-1);
 	ret = base64_encode(p.getAll());
-	return ret.c_str();
+	return delayMemFreeCStr(ret.c_str());
 }
 
 CQAPI(int32_t, CQ_sendDiscussMsg, 16)(int32_t plugin_id, int64_t group, const char* msg)
