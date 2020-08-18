@@ -361,8 +361,8 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 				// 已有图片
 				if (fileStr[0] == '{')
 				{
-					regex groupPic("\\{([0-9A-Fa-f]{8})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{12})\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
-					regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-]([0-9A-Fa-f]{32})\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
+					regex groupPic("\\{([0-9A-Fa-f]{8})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{12})\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
+					regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-]([0-9A-Fa-f]{32})\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
 					smatch m;
 					// 转换群聊和好友图片
 					if (uploadType == 1 && regex_match(fileStr, m, groupPic))
@@ -375,7 +375,7 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 						fileStr = "{"s + guid.substr(0, 8) + "-" + guid.substr(9, 4) + "-" + guid.substr(13, 4) + "-" + guid.substr(17, 4) + "-" + guid.substr(21) + "}" + "." + m[2].str();
 					}
 				}
-				else if (fileStr.substr(0, 4) == "http" || fileStr.substr(0, 3) == "ftp")
+				else if (fileStr.substr(0, 4) == "http" || fileStr.substr(0, 3) == "ftp" || fileStr.substr(0, 2) == "ww")
 				{
 					; // Do nothing
 				}
@@ -1488,8 +1488,8 @@ CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* file)
 	}
 
 	// 现在是图片名本身，判断是否符合格式, 并判断是好友图片还是群聊图片
-	regex groupPic("\\{[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
-	regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-][0-9A-Fa-f]{32}\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
+	regex groupPic("\\{[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
+	regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-][0-9A-Fa-f]{32}\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
 	if (regex_match(fileStr, groupPic))
 	{
 		fileStr = "[pic=" + fileStr + "]";
