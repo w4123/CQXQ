@@ -133,7 +133,7 @@ namespace XQAPI
 
 	XQAPI(GetOnLineList, const char*)
 
-	XQAPI(UpLoadPic, const char*, const char* botQQ, int32_t uploadType, const char* targetId, const unsigned char* image)
+	XQAPI(UpLoadPic, const char*, const char* botQQ, int32_t uploadType, const char* targetId, const char* image)
 
 	XQAPI(IfFriend, BOOL, const char* botQQ, const char* QQ)
 
@@ -374,23 +374,47 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 						std::string guid = m[1].str();
 						fileStr = "{"s + guid.substr(0, 8) + "-" + guid.substr(9, 4) + "-" + guid.substr(13, 4) + "-" + guid.substr(17, 4) + "-" + guid.substr(21) + "}" + "." + m[2].str();
 					}
+					ret += "[pic=";
+					ret += fileStr;
+					ret += "]";
 				}
 				else if (fileStr.substr(0, 4) == "http" || fileStr.substr(0, 3) == "ftp" || fileStr.substr(0, 2) == "ww")
 				{
-					; // Do nothing
+					ret += "[pic=";
+					ret += fileStr;
+					ret += "]";
 				}
 				else if (fileStr.substr(0, 6) == "base64")
 				{
-					// TODO: Base64
-					;
+					// 格式应该是base64://...
+					std::string imageData = base64_decode(fileStr.substr(9));
+					int header = 1, length = imageData.size();
+					imageData = std::string(reinterpret_cast<char*>(&header), 4) + std::string(reinterpret_cast<char*>(&length), 4) + imageData;
+					const char* pic = XQAPI::UpLoadPic(robotQQ.c_str(), uploadType, targetId, imageData.c_str() + 8);
+					if (!pic || strlen(pic) == 0)
+					{
+						ret += "空图片";
+					}
+					else
+					{
+						ret += pic;
+					}
 				}
 				else
 				{
-					fileStr = rootPath + "\\data\\image\\" + fileStr;
+					// file:///...
+					if (fileStr.substr(0, 4) == "file")
+					{
+						fileStr = fileStr.substr(8);
+					}
+					else
+					{
+						fileStr = rootPath + "\\data\\image\\" + fileStr;
+					}
+					ret += "[pic=";
+					ret += fileStr;
+					ret += "]";
 				}
-				ret += "[pic=";
-				ret += fileStr;
-				ret += "]";
 			}
 		}
 		else if (msgStr.substr(l, 16) == "[CQ:record,file=")
