@@ -333,34 +333,65 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 			ret += msgStr.substr(l + 10, r - l - 10);
 			ret += "]";
 		}
-		else if (msgStr.substr(l, 15) == "[CQ:image,file=")
+		else if (msgStr.substr(l, 10) == "[CQ:image,")
 		{
-			if (msgStr[l + 15] == '{')
+			
+			std::string fileStr;
+			fileStr += msgStr.substr(l + 10, r - l - 10);
+			// 现在的状态是file=xxx.jpg/png/gif/...(,cache=xxx)
+			size_t file_loc = fileStr.find("file=");
+
+			// 处理File和URL两种情况，忽略掉cache等参数
+			if (file_loc != string::npos)
 			{
-				ret += "[pic=";
-				ret += msgStr.substr(l + 15, r - l - 15);
-				ret += "]";
+				fileStr = fileStr.substr(file_loc + 5, fileStr.find(',', file_loc) - file_loc - 5);
 			}
 			else
 			{
-				std::string image;
-				image += msgStr.substr(l + 15, r - l - 15);
-				if (image.substr(0, 4) != "http" && image.substr(0, 3) != "ftp")
+				size_t file_loc = fileStr.find("url=");
+				if (file_loc != string::npos)
 				{
-					image = rootPath + "\\data\\image\\" + image;
+					fileStr = fileStr.substr(file_loc + 4, fileStr.find(',', file_loc) - file_loc - 4);
+				}
+			}
+
+			// 判断是已有图片，本地图片，网络URL还是Base64
+			if (!fileStr.empty())
+			{
+				// 已有图片
+				if (fileStr[0] == '{')
+				{
+					regex groupPic("\\{([0-9A-Fa-f]{8})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{12})\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
+					regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-]([0-9A-Fa-f]{32})\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
+					smatch m;
+					// 转换群聊和好友图片
+					if (uploadType == 1 && regex_match(fileStr, m, groupPic))
+					{
+						fileStr = "{"s + robotQQ.c_str() + "-" + "1234567879" + "-" + m[1].str() + m[2].str() + m[3].str() + m[4].str() + m[5].str() + "}" + "." + m[6].str();
+					}
+					else if (uploadType == 2 && regex_match(fileStr, m, privatePic))
+					{
+						std::string guid = m[1].str();
+						fileStr = "{"s + guid.substr(0, 8) + "-" + guid.substr(9, 4) + "-" + guid.substr(13, 4) + "-" + guid.substr(17, 4) + "-" + guid.substr(21) + "}" + "." + m[2].str();
+					}
+				}
+				else if (fileStr.substr(0, 4) == "http" || fileStr.substr(0, 3) == "ftp")
+				{
+					; // Do nothing
+				}
+				else if (fileStr.substr(0, 6) == "base64")
+				{
+					// TODO: Base64
+					;
+				}
+				else
+				{
+					fileStr = rootPath + "\\data\\image\\" + fileStr;
 				}
 				ret += "[pic=";
-				ret += image;
+				ret += fileStr;
 				ret += "]";
 			}
-		}
-		else if (msgStr.substr(l, 14) == "[CQ:image,url=")
-		{
-			std::string image;
-			image += msgStr.substr(l + 14, r - l - 14);
-			ret += "[pic=";
-			ret += image;
-			ret += "]";
 		}
 		else if (msgStr.substr(l, 16) == "[CQ:record,file=")
 		{
@@ -1073,7 +1104,6 @@ CQAPI(int32_t, CQ_deleteMsg, 12)(int32_t plugin_id, int64_t msg_id)
 	XQAPI::WithdrawMsg(robotQQ.c_str(), std::to_string(((FakeMsgId*)(int32_t(msg_id)))->groupId).c_str(),
 		std::to_string(((FakeMsgId*)(int32_t(msg_id)))->msgNum).c_str(),
 		std::to_string(((FakeMsgId*)(int32_t(msg_id)))->msgId).c_str());
-	//XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_deleteMsg").c_str());
 	return 0;
 }
 
