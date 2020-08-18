@@ -560,9 +560,6 @@ struct FakeMsgId
 	long long msgId;
 };
 
-
-CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* file);
-
 #ifdef XQ
 CQAPI(int32_t, XQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 #else
@@ -639,7 +636,6 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_FriendMsgEvent)
 		{
-			XQAPI::OutPutLog(CQ_getImage(0, msg));
 			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 			{
 				if (!plugins[plugin.plugin_id].enabled) continue;
