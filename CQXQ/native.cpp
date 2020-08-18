@@ -8,6 +8,7 @@
 #include <set>
 #include <exception>
 #include <stdexcept>
+#include <sstream>
 #include "GlobalVar.h"
 #include "native.h"
 #include "CQTools.h"
@@ -173,7 +174,19 @@ int loadCQPlugin(const std::filesystem::path& file)
 	{
 		try
 		{
-			nlohmann::json j = nlohmann::json::parse(jsonstream, nullptr, true, true);
+			stringstream jStrStream;
+			jStrStream << jsonstream.rdbuf();
+			std::string jsonStr = jStrStream.str();
+			nlohmann::json j;
+			try
+			{
+				j = nlohmann::json::parse(jsonStr, nullptr, true, true);
+			}
+			catch (std::exception&)
+			{
+				j = nlohmann::json::parse(GB18030toUTF8(jsonStr), nullptr, true, true);
+			}
+			
 			plugin.name = UTF8toGB18030(j["name"].get<std::string>());
 			plugin.version = UTF8toGB18030(j["version"].get<std::string>());
 			j["version_id"].get_to(plugin.version_id);

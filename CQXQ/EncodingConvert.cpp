@@ -33,3 +33,8 @@ std::string UTF8toGB18030(const std::string& strUTF8)
 {
 	return ConvertEncoding(strUTF8, "utf-8", "gb18030");
 }
+
+std::string GB18030toUTF8(const std::string& strGB18030)
+{
+	return ConvertEncoding(strGB18030, "gb18030", "utf-8");
+}
