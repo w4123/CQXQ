@@ -18,6 +18,7 @@
 #include "GUI.h"
 #include "resource.h"
 #include "EncodingConvert.h"
+#include <regex>
 
 using namespace std;
 
@@ -143,6 +144,8 @@ namespace XQAPI
 	XQAPI(GetVoiLink, const char*, const char* botQQ, const char* GUID)
 
 	XQAPI(WithdrawMsg, const char*, const char* botQQ, const char* groupId, const char* msgNum, const char* msgId)
+
+	XQAPI(GetPicLink, const char*, const char* botQQ, int32_t picType, const char* sourceId, const char* GUID)
 #undef XQAPI
 }
 
@@ -557,6 +560,9 @@ struct FakeMsgId
 	long long msgId;
 };
 
+
+CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* file);
+
 #ifdef XQ
 CQAPI(int32_t, XQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 #else
@@ -633,6 +639,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_FriendMsgEvent)
 		{
+			XQAPI::OutPutLog(CQ_getImage(0, msg));
 			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 			{
 				if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1434,9 +1441,41 @@ CQAPI(const char*, CQ_getCsrfToken, 4)(int32_t plugin_id)
 	return XQAPI::GetBkn(robotQQ.c_str());
 }
 
-CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* image)
+CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* file)
 {
-	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了未实现的API CQ_getImage").c_str());
+	if (!file) return "";
+	std::string fileStr(file);
+	if (fileStr.empty()) return "";
+	if (fileStr.substr(0, 10) == "[CQ:image," && fileStr[fileStr.length() - 1] == ']')
+	{
+		fileStr = fileStr.substr(10, fileStr.length() - 10 - 1);
+		// 现在的状态是file=xxx.jpg/png/gif/...(,cache=xxx)
+		size_t file_loc = fileStr.find("file=");
+		if (file_loc != string::npos)
+		{
+			fileStr = fileStr.substr(file_loc + 5, fileStr.find(',', file_loc) - file_loc - 5);
+		}
+	}
+	else if (fileStr.substr(0, 5) == "[pic=" && fileStr[fileStr.length() - 1] == ']')
+	{
+		fileStr = fileStr.substr(5, fileStr.length() - 5 - 1);
+	}
+
+	// 现在是图片名本身，判断是否符合格式, 并判断是好友图片还是群聊图片
+	regex groupPic("\\{[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
+	regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-][0-9A-Fa-f]{32}\\}\\.(jpg|png|gif)", regex::ECMAScript | regex::icase);
+	if (regex_match(fileStr, groupPic))
+	{
+		fileStr = "[pic=" + fileStr + "]";
+		// 群号其实并没有用，随便写一个
+		return XQAPI::GetPicLink(robotQQ.c_str(), 2, "173528463", fileStr.c_str());
+	}
+	else if (regex_match(fileStr, privatePic))
+	{
+		fileStr = "[pic=" + fileStr + "]";
+		return XQAPI::GetPicLink(robotQQ.c_str(), 1, "", fileStr.c_str());
+	}
+
 	return "";
 }
 
@@ -1509,6 +1548,7 @@ CQAPI(int32_t, CQ_setGroupAddRequestV2, 20)(int32_t plugin_id, const char* id, i
 
 CQAPI(int32_t, CQ_setGroupAdmin, 24)(int32_t plugin_id, int64_t group, int64_t account, BOOL admin)
 {
+	// https://qinfo.clt.qq.com/cgi-bin/qun_info/set_group_admin
 	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setAdmin").c_str());
 	//XQAPI::SetAdmin(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(account).c_str(), admin);
 	return 0;
