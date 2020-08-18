@@ -27,6 +27,7 @@ using namespace std;
 #define ID_MASTER_BUTTONMENU 1003
 #define ID_MASTER_STATICDESC 1004
 #define ID_MASTER_LVPLUGIN 1005
+#define ID_MASTER_BUTTONRECVSELFMSG 1006
 
 template <typename T>
 class BaseWindow
@@ -423,6 +424,7 @@ public:
 	BasicButton ButtonEnable;
 	BasicButton ButtonReload;
 	BasicButton ButtonMenu;
+	BasicButton ButtonSwitchRecvSelfMsg;
 
 	std::map<std::string, HFONT> Fonts;
 	LRESULT CreateMainPage();
@@ -587,6 +589,30 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			MessageBoxA(m_hwnd, "暂未实现，敬请期待", "CQXQ", MB_OK);
 		}
 		return 0;
+		case ID_MASTER_BUTTONRECVSELFMSG:
+		{
+			RecvSelfEvent = !RecvSelfEvent;
+			ButtonSwitchRecvSelfMsg.SetText(RecvSelfEvent ? "停止接收来自自己的事件" : "开始接收来自自己的事件");
+			std::filesystem::path p(rootPath);
+			p.append("CQPlugins").append(".cqxq_recv_self_event.enable");
+			if (RecvSelfEvent)
+			{
+				if (!std::filesystem::exists(p))
+				{
+					ofstream fstream(p); // 创建文件
+					fstream << "This file is used to enable CQXQ to receive message from the robot itself";
+					fstream.close();
+				}
+			}
+			else
+			{
+				if (std::filesystem::exists(p))
+				{
+					std::filesystem::remove(p);
+				}
+			}
+		}
+		return 0;
 		default:
 			return DefWindowProc(m_hwnd, uMsg, wParam, lParam);
 		}
@@ -638,10 +664,12 @@ LRESULT GUI::CreateMainPage()
 		500, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRELOAD));
 	ButtonMenu.Create("菜单", WS_CHILD | WS_VISIBLE, 0,
 		600, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONMENU));
+	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "停止接收来自自己的事件" : "停止接收来自自己的事件", WS_CHILD | WS_VISIBLE, 0,
+		400, 320, 270, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRECVSELFMSG));
 
 	StaticDesc.Create("双击左侧列表选择一个插件",
 		WS_CHILD | WS_VISIBLE, 0,
-		400, 30, 300, 200, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_STATICDESC));
+		400, 30, 270, 200, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_STATICDESC));
 
 	ListViewPlugin.Create("",
 		WS_CHILD | LVS_REPORT | WS_VISIBLE | WS_BORDER | LVS_SINGLESEL,
@@ -665,6 +693,7 @@ LRESULT GUI::CreateMainPage()
 	ButtonReload.SetFont(Yahei18);
 	ButtonMenu.SetFont(Yahei18);
 	StaticDesc.SetFont(Yahei18);
+	ButtonSwitchRecvSelfMsg.SetFont(Yahei18);
 	return 0;
 }
 
@@ -684,7 +713,7 @@ int WINAPI GUIMain()
 	GUI MainWindow;
 
 	if (!MainWindow.Create("CQXQ GUI", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_BORDER | WS_CLIPSIBLINGS, 0,
-		CW_USEDEFAULT, CW_USEDEFAULT, 780, 500))
+		CW_USEDEFAULT, CW_USEDEFAULT, 710, 500))
 	{
 		return 0;
 	}

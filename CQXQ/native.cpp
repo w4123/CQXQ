@@ -472,6 +472,11 @@ CQAPI(const char*, OQ_Create, 0)()
 	std::string pathStr(path);
 	rootPath = pathStr.substr(0, pathStr.rfind("\\"));
 
+	// 载入配置
+	filesystem::path p(rootPath);
+	p.append("CQPlugins").append(".cqxq_recv_self_event.enable");
+	RecvSelfEvent = filesystem::exists(p);
+
 	// 载入API DLL并加载API函数
 #ifdef XQ
 	XQHModule = LoadLibraryA("xqapi.dll");
@@ -689,6 +694,13 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 			}
 			return 0;
 		}
+
+		// 如果不接收来自自己的事件, 直接退出函数
+		if (activeQQ && !RecvSelfEvent && activeQQ == robotQQ)
+		{
+			return 0;
+		}
+
 		if (msgType == XQ_FriendMsgEvent)
 		{
 			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])

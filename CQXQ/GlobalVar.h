@@ -52,3 +52,6 @@ extern std::string rootPath;
 
 // 启用事件是否已经被调用，用于在QQ登陆成功以后再调用启用事件
 extern bool EnabledEventCalled;
+
+// 是否接收来自自己的事件
+extern bool RecvSelfEvent;
