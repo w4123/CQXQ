@@ -664,7 +664,7 @@ LRESULT GUI::CreateMainPage()
 		500, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRELOAD));
 	ButtonMenu.Create("菜单", WS_CHILD | WS_VISIBLE, 0,
 		600, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONMENU));
-	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "停止接收来自自己的事件" : "停止接收来自自己的事件", WS_CHILD | WS_VISIBLE, 0,
+	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "停止接收来自自己的事件" : "开始接收来自自己的事件", WS_CHILD | WS_VISIBLE, 0,
 		400, 320, 270, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRECVSELFMSG));
 
 	StaticDesc.Create("双击左侧列表选择一个插件",
