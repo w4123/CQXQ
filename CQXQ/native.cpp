@@ -851,15 +851,21 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 		}
 		if (msgType == XQ_GroupBanEvent)
 		{
-			// TODO: 禁言时间
-			XQAPI::OutPutLog(msg);
+			int banTime = 0;
+			std::string banTimeStr = msg ? msg : "";
+			regex banTimeRegex("([0-9]+)天([0-9]+)时([0-9]+)分([0-9]+)秒", regex::ECMAScript);
+			smatch m;
+			if (regex_search(banTimeStr, m, banTimeRegex))
+			{
+				banTime = std::stoi(m[1]) * 86400 + std::stoi(m[2]) * 3600 + std::stoi(m[3]) * 60 + std::stoi(m[4]);
+			}
 			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
 			{
 				if (!plugins[plugin.plugin_id].enabled) continue;
 				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60)) break;
+					if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), banTime)) break;
 				}
 			}
 			return 0;
