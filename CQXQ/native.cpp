@@ -385,7 +385,7 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 					else if (uploadType == 2 && regex_match(fileStr, m, privatePic))
 					{
 						std::string guid = m[1].str();
-						fileStr = "{"s + guid.substr(0, 8) + "-" + guid.substr(9, 4) + "-" + guid.substr(13, 4) + "-" + guid.substr(17, 4) + "-" + guid.substr(21) + "}" + "." + m[2].str();
+						fileStr = "{"s + guid.substr(0, 8) + "-" + guid.substr(8, 4) + "-" + guid.substr(12, 4) + "-" + guid.substr(16, 4) + "-" + guid.substr(20) + "}" + "." + m[2].str();
 					}
 					ret += "[pic=";
 					ret += fileStr;
