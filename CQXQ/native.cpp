@@ -795,7 +795,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					if (invited(2, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+					if (invited(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
@@ -813,7 +813,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					if (addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+					if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
@@ -831,7 +831,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					if (addReq(1, 0, atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+					if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
@@ -844,7 +844,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto addReq = EvRequestAddFriend(plugin.event);
 				if (addReq)
 				{
-					if (addReq(1, 0, atoll(activeQQ), msg, activeQQ)) break;
+					if (addReq(1, atoi(timeStamp), atoll(activeQQ), msg, activeQQ)) break;
 				}
 			}
 			return 0;
@@ -859,7 +859,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					if (ban(2, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60)) break;
+					if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 60)) break;
 				}
 			}
 			return 0;
@@ -872,7 +872,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					if (ban(1, 0, atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0)) break;
+					if (ban(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0)) break;
 				}
 			}
 			return 0;
@@ -898,7 +898,7 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				const auto ban = EvGroupBan(plugin.event);
 				if (ban)
 				{
-					if (ban(1, 0, atoll(sourceId), atoll(activeQQ), 0, 0)) break;
+					if (ban(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0)) break;
 				}
 			}
 			return 0;
@@ -1687,5 +1687,10 @@ CQAPI(int32_t, CQ_setGroupAddRequest, 16)(int32_t plugin_id, const char* id, int
 CQAPI(int32_t, CQ_sendLike, 12)(int32_t plugin_id, int64_t account)
 {
 	return CQ_sendLikeV2(plugin_id, account, 1);
+}
+
+CQAPI(int32_t, isCQXQ, 0)()
+{
+	return 1;
 }
 
