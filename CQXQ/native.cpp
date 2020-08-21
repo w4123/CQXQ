@@ -1472,7 +1472,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		p.add(permissions);
 		p.add(FALSE);
 		p.add("");
-		p.add(0);
+		p.add(-1);
 		p.add(TRUE);
 		ret = base64_encode(p.getAll());
 		return delayMemFreeCStr(ret.c_str());
