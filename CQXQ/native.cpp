@@ -584,9 +584,9 @@ CQAPI(const char*, OQ_Create, 0)()
 		}
 	});
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.6\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.7\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.6}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.0.7}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
