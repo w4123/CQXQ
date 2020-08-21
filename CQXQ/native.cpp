@@ -151,9 +151,9 @@ namespace XQAPI
 
 	XQAPI(SendXML, void, const char* botQQ, int32_t sendType, int32_t msgType, const char* groupId, const char* QQ, const char* objectMsg, int32_t subType)
 
-	XQAPI(GetAge, int32_t, const char* botQQ, const char* QQ)
+	//XQAPI(GetAge, int32_t, const char* botQQ, const char* QQ)
 
-	XQAPI(GetGender, int32_t, const char* botQQ, const char* QQ)
+	//XQAPI(GetGender, int32_t, const char* botQQ, const char* QQ)
 #undef XQAPI
 }
 
@@ -1437,10 +1437,10 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		t.add(account);
 		t.add(j["members"][accStr].count("nk") ? UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>()) : "");
 		t.add(j["members"][accStr].count("cd") ? UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>()) : "");
-		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
 		t.add(255);
 		t.add(-1);
 		/*
+		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
 		t.add(gender == -1 ? 255 : -1);
 		t.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
 		*/
@@ -1469,10 +1469,10 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		p.add(nick ? nick : "");
 		const char* groupCard = XQAPI::GetGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
 		p.add(groupCard ? groupCard : "");
-		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
 		p.add(255);
 		p.add(-1);
 		/*
+		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
 		p.add(gender == -1 ? 255 : -1);
 		p.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
 		*/
@@ -1540,10 +1540,10 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			t.add(qq);
 			t.add(member.value().count("nk") ? UTF8toGB18030(member.value()["nk"].get<std::string>()) : "");
 			t.add(member.value().count("cd") ? UTF8toGB18030(member.value()["cd"].get<std::string>()) : "");
-			int gender = XQAPI::GetGender(robotQQ.c_str(), member.key().c_str());
 			t.add(255);
 			t.add(-1);
 			/*
+			int gender = XQAPI::GetGender(robotQQ.c_str(), member.key().c_str());
 			t.add(gender == -1 ? 255 : -1);
 			t.add(XQAPI::GetAge(robotQQ.c_str(), member.key().c_str()));
 			*/
@@ -1636,10 +1636,10 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	Unpack p;
 	p.add(account);
 	p.add(XQAPI::GetNick(robotQQ.c_str(), accStr.c_str()));
-	int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
 	p.add(255);
 	p.add(-1);
 	/*
+	int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
 	p.add(gender == -1 ? 255 : gender);
 	p.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
 	*/
