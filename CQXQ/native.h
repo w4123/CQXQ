@@ -19,11 +19,12 @@ typedef int32_t (__stdcall* EvRequestAddFriend)(int32_t, int32_t, int64_t, const
 typedef int32_t (__stdcall* EvFriendAdd)(int32_t, int32_t, int64_t);
 
 
+#define XQ_StartupComplete 10000
+#define XQ_Exit 10001
 #define XQ_Load 12000
 #define XQ_Enable 12001
 #define XQ_Disable 12002
-#define XQ_StartupComplete 10000
-#define XQ_Reboot 10001
+
 
 #define XQ_FriendMsgEvent 1
 #define XQ_GroupMsgEvent 2

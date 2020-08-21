@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="1">
+    <builddir>CQXQ-cppcheck-build-dir</builddir>
+    <platform>Unspecified</platform>
+    <importproject>native.sln</importproject>
+    <analyze-all-vs-configs>false</analyze-all-vs-configs>
+    <check-headers>true</check-headers>
+    <check-unused-templates>false</check-unused-templates>
+    <max-ctu-depth>10</max-ctu-depth>
+    <vs-configurations>
+        <config>Debug</config>
+        <config>Release</config>
+    </vs-configurations>
+</project>

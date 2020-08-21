@@ -193,6 +193,7 @@
     <ClInclude Include="json.hpp" />
     <ClInclude Include="native.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="RichMessage.h" />
     <ClInclude Include="Unpack.h" />
   </ItemGroup>
   <ItemGroup>
@@ -201,6 +202,7 @@
     <ClCompile Include="GlobalVar.cpp" />
     <ClCompile Include="GUI.cpp" />
     <ClCompile Include="native.cpp" />
+    <ClCompile Include="RichMessage.cpp" />
     <ClCompile Include="Unpack.cpp" />
   </ItemGroup>
   <ItemGroup>

@@ -20,6 +20,7 @@
 #include "resource.h"
 #include "EncodingConvert.h"
 #include <regex>
+#include "RichMessage.h"
 
 using namespace std;
 
@@ -147,6 +148,12 @@ namespace XQAPI
 	XQAPI(WithdrawMsg, const char*, const char* botQQ, const char* groupId, const char* msgNum, const char* msgId)
 
 	XQAPI(GetPicLink, const char*, const char* botQQ, int32_t picType, const char* sourceId, const char* GUID)
+
+	XQAPI(SendXML, void, const char* botQQ, int32_t sendType, int32_t msgType, const char* groupId, const char* QQ, const char* objectMsg, int32_t subType)
+
+	XQAPI(GetAge, int32_t, const char* botQQ, const char* QQ)
+
+	XQAPI(GetGender, int32_t, const char* botQQ, const char* QQ)
 #undef XQAPI
 }
 
@@ -299,8 +306,16 @@ std::string parseToCQCode(const char* msg)
 		}
 		else if (msgStr.substr(l, 5) == "[pic=")
 		{
+			size_t commaLoc = msgStr.find(',', l);
 			ret += "[CQ:image,file=";
-			ret += msgStr.substr(l + 5, r - l - 5);
+			if (commaLoc < r)
+			{
+				ret += msgStr.substr(l + 5, commaLoc - l - 5);
+			}
+			else
+			{
+				ret += msgStr.substr(l + 5, r - l - 5);
+			}
 			ret += "]";
 		}
 		else if (msgStr.substr(l, 5) == "[Voi=")
@@ -332,6 +347,7 @@ std::string parseToCQCode(const char* msg)
 std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char* msg)
 {
 	if (!msg) return "";
+	std::vector<std::string> retv;
 	std::string_view msgStr(msg);
 	std::string ret;
 	size_t l = 0, r = 0, last = 0;
@@ -580,14 +596,6 @@ CQAPI(int32_t, XQ_DestroyPlugin, 0)()
 CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 #endif
 {
-	for (const auto& plugin : plugins_events[CQ_eventExit])
-	{
-		const auto exit = IntMethod(plugin.event);
-		if (exit)
-		{
-			exit();
-		}
-	}
 	FreeLibrary(XQHModule);
 	FreeLibrary(CQPHModule);
 	memFreeThreadShouldRun = false;
@@ -654,6 +662,17 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 				}
 			}
 			return 0;
+		}
+		if (msgType == XQ_Exit)
+		{
+			for (const auto& plugin : plugins_events[CQ_eventExit])
+			{
+				const auto exit = IntMethod(plugin.event);
+				if (exit)
+				{
+					exit();
+				}
+			}
 		}
 		if (msgType == XQ_Enable)
 		{
@@ -1376,6 +1395,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 
 	try
 	{
+		std::string accStr = std::to_string(account);
 		if (memberListStr.empty())
 		{
 			throw std::exception("GetGroupMemberList Failed");
@@ -1389,18 +1409,19 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		{
 			lvlName[item.first] = UTF8toGB18030(item.second);
 		}
-		if (!j["members"].count(std::to_string(account))) return "";
+		if (!j["members"].count(accStr)) return "";
 		Unpack t;
 		t.add(group);
 		t.add(account);
-		t.add(j["members"].count("nk") ? UTF8toGB18030(j["members"]["nk"].get<std::string>()) : "");
-		t.add(j["members"].count("cd") ? UTF8toGB18030(j["members"]["cd"].get<std::string>()) : "");
-		t.add(255);
-		t.add(-1);
+		t.add(j["members"][accStr].count("nk") ? UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>()) : "");
+		t.add(j["members"][accStr].count("cd") ? UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>()) : "");
+		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
+		t.add(gender == -1 ? 255 : -1);
+		t.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
 		t.add("");
-		t.add(j["members"].count("jt") ? j["members"]["jt"].get<int>() : 0);
-		t.add(j["members"].count("lst") ? j["members"]["lst"].get<int>() : 0);
-		t.add(j["members"].count("ll") ? (lvlName.count("lvln" + std::to_string(j["members"]["ll"].get<int>())) ? lvlName["lvln" + std::to_string(j["members"]["ll"].get<int>())] : "") : "");
+		t.add(j["members"][accStr].count("jt") ? j["members"][accStr]["jt"].get<int>() : 0);
+		t.add(j["members"][accStr].count("lst") ? j["members"][accStr]["lst"].get<int>() : 0);
+		t.add(j["members"][accStr].count("ll") ? (lvlName.count("lvln" + std::to_string(j["members"][accStr]["ll"].get<int>())) ? lvlName["lvln" + std::to_string(j["members"][accStr]["ll"].get<int>())] : "") : "");
 		t.add(account == owner ? 3 : (admin.count(account) ? 2 : 1));
 		t.add(FALSE);
 		t.add("");
@@ -1422,8 +1443,9 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		p.add(nick ? nick : "");
 		const char* groupCard = XQAPI::GetGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
 		p.add(groupCard ? groupCard : "");
-		p.add(255);
-		p.add(-1);
+		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
+		p.add(gender == -1 ? 255 : -1);
+		p.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
 		p.add("");
 		p.add(0);
 		p.add(0);
@@ -1488,8 +1510,9 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			t.add(qq);
 			t.add(member.value().count("nk") ? UTF8toGB18030(member.value()["nk"].get<std::string>()) : "");
 			t.add(member.value().count("cd") ? UTF8toGB18030(member.value()["cd"].get<std::string>()) : "");
-			t.add(255);
-			t.add(-1);
+			int gender = XQAPI::GetGender(robotQQ.c_str(), member.key().c_str());
+			t.add(gender == -1 ? 255 : -1);
+			t.add(XQAPI::GetAge(robotQQ.c_str(), member.key().c_str()));
 			t.add("");
 			t.add(member.value().count("jt") ? member.value()["jt"].get<int>() : 0);
 			t.add(member.value().count("lst") ? member.value()["lst"].get<int>() : 0);
@@ -1572,15 +1595,16 @@ CQAPI(const char*, CQ_getRecordV2, 12)(int32_t plugin_id, const char* file, cons
 	return XQAPI::GetVoiLink(robotQQ.c_str(), fileStr.c_str());
 }
 
-CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, BOOL cache)
+CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, BOOL disableCache)
 {
 	std::string ret;
 	std::string accStr = std::to_string(account);
 	Unpack p;
 	p.add(account);
 	p.add(XQAPI::GetNick(robotQQ.c_str(), accStr.c_str()));
-	p.add(255);
-	p.add(-1);
+	int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
+	p.add(gender == -1 ? 255 : gender);
+	p.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
 	ret = base64_encode(p.getAll());
 	return delayMemFreeCStr(ret.c_str());
 }
