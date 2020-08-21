@@ -469,6 +469,28 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 			ret += msgStr.substr(l + 12, r - l - 12);
 			ret += ".gif]";
 		}
+		else if (msgStr.substr(l, 13) == "[CQ:emoji,id=")
+		{
+			try
+			{
+				std::string idStr(msgStr.substr(l + 13, r - l - 13));
+				u32string u32_str;
+				u32_str.append({ static_cast<char32_t>(std::stoul(idStr)) });
+				std::string utf8 = ConvertEncoding<char>(u32_str, "utf-32le", "utf-8");
+				std::stringstream stream;
+				for (char c : utf8)
+				{
+					stream << setfill('0') << hex << uppercase << setw(2) << (0xff & (unsigned int)c);
+				}
+				ret += "[emoji=";
+				ret += stream.str();
+				ret += "]";
+			}
+			catch (...)
+			{
+				ret += msgStr.substr(l, r - l + 1);
+			}
+		}
 		else
 		{
 			ret += msgStr.substr(l, r - l + 1);
@@ -1416,8 +1438,12 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		t.add(j["members"][accStr].count("nk") ? UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>()) : "");
 		t.add(j["members"][accStr].count("cd") ? UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>()) : "");
 		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
+		t.add(255);
+		t.add(-1);
+		/*
 		t.add(gender == -1 ? 255 : -1);
 		t.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
+		*/
 		t.add("");
 		t.add(j["members"][accStr].count("jt") ? j["members"][accStr]["jt"].get<int>() : 0);
 		t.add(j["members"][accStr].count("lst") ? j["members"][accStr]["lst"].get<int>() : 0);
@@ -1444,8 +1470,12 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		const char* groupCard = XQAPI::GetGroupCard(robotQQ.c_str(), grpStr.c_str(), accStr.c_str());
 		p.add(groupCard ? groupCard : "");
 		int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
+		p.add(255);
+		p.add(-1);
+		/*
 		p.add(gender == -1 ? 255 : -1);
 		p.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
+		*/
 		p.add("");
 		p.add(0);
 		p.add(0);
@@ -1511,8 +1541,12 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			t.add(member.value().count("nk") ? UTF8toGB18030(member.value()["nk"].get<std::string>()) : "");
 			t.add(member.value().count("cd") ? UTF8toGB18030(member.value()["cd"].get<std::string>()) : "");
 			int gender = XQAPI::GetGender(robotQQ.c_str(), member.key().c_str());
+			t.add(255);
+			t.add(-1);
+			/*
 			t.add(gender == -1 ? 255 : -1);
 			t.add(XQAPI::GetAge(robotQQ.c_str(), member.key().c_str()));
+			*/
 			t.add("");
 			t.add(member.value().count("jt") ? member.value()["jt"].get<int>() : 0);
 			t.add(member.value().count("lst") ? member.value()["lst"].get<int>() : 0);
@@ -1603,8 +1637,12 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	p.add(account);
 	p.add(XQAPI::GetNick(robotQQ.c_str(), accStr.c_str()));
 	int gender = XQAPI::GetGender(robotQQ.c_str(), accStr.c_str());
+	p.add(255);
+	p.add(-1);
+	/*
 	p.add(gender == -1 ? 255 : gender);
 	p.add(XQAPI::GetAge(robotQQ.c_str(), accStr.c_str()));
+	*/
 	ret = base64_encode(p.getAll());
 	return delayMemFreeCStr(ret.c_str());
 }
