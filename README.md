@@ -67,6 +67,7 @@ CQ码
 - [x] image(file或者URL)
 - [x] record
 - [x] face
+- [x] emoji(只支持单向从cq码到emoji的转换)
 - [ ] 其他
 
 GUI及管理
