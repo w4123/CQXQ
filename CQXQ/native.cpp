@@ -103,6 +103,8 @@ namespace XQAPI
 
 	XQAPI(GetGroupName, const char*, const char* botQQ, const char* groupId)
 
+	XQAPI(GetFriendList, const char*, const char* botQQ)
+
 	XQAPI(GetFriendList_B, const char*, const char* botQQ)
 
 	XQAPI(GetFriendsRemark, const char*, const char* botQQ, const char* QQ)
@@ -872,7 +874,8 @@ CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType
 					p.add(sourceId);
 					p.add(activeQQ);
 					p.add(rawMsg);
-					if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+					const string CQInviteMsg = "邀请人：[CQ:at,qq="s + activeQQ + "]" + (msg ? (" 附言："s + msg) : "");
+					if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ), CQInviteMsg.c_str(), base64_encode(p.getAll()).c_str())) break;
 				}
 			}
 			return 0;
@@ -1292,7 +1295,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 	}
 	catch (std::exception&)
 	{
-		XQAPI::OutPutLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
+		XQAPI::OutPutLog(("警告, 获取群信息失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string groupStr = std::to_string(group);
 		const char* groupName = XQAPI::GetGroupName(robotQQ.c_str(), groupStr.c_str());
 		std::string groupNameStr = groupName ? groupName : "";
@@ -1362,37 +1365,8 @@ CQAPI(const char*, CQ_getGroupList, 4)(int32_t plugin_id)
 	}
 	catch (std::exception&)
 	{
-		XQAPI::OutPutLog(("警告, 获取群列表失败, 正在使用更慢的另一种方法尝试: "s + groupList).c_str());
-		const char* group = XQAPI::GetGroupList_B(robotQQ.c_str());
-		if (!group) return "";
-		std::string groupList = group;
-		Unpack p;
-		std::vector<Unpack> Groups;
-		int count = 0;
-		while (!groupList.empty())
-		{
-			size_t endline = groupList.find('\n');
-			std::string item = groupList.substr(0, endline);
-			while (!item.empty() && item[item.length() - 1] == '\r' || item[item.length() - 1] == '\n') item.erase(item.end() - 1);
-			if (!item.empty())
-			{
-				Unpack tmp;
-				tmp.add(atoll(item.c_str()));
-				const char* groupName = XQAPI::GetGroupName(robotQQ.c_str(), item.c_str());
-				tmp.add(groupName ? groupName : "");
-				Groups.push_back(tmp);
-				count++;
-			}
-			if (endline == string::npos) groupList = "";
-			else groupList = groupList.substr(endline + 1);
-		}
-		p.add(count);
-		for (auto& g : Groups)
-		{
-			p.add(g);
-		}
-		ret = base64_encode(p.getAll());
-		return delayMemFreeCStr(ret.c_str());
+		XQAPI::OutPutLog(("警告, 获取群列表失败: "s + groupListStr).c_str());
+		return "";
 	}
 }
 
@@ -1459,7 +1433,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 	}
 	catch (std::exception&)
 	{
-		XQAPI::OutPutLog(("警告, 获取群成员列表失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
+		XQAPI::OutPutLog(("警告, 获取群成员信息失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string grpStr = std::to_string(group);
 		std::string accStr = std::to_string(account);
 		Unpack p;
@@ -1564,6 +1538,7 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 	}
 	catch (std::exception&)
 	{
+		XQAPI::OutPutLog(("警告, 获取群成员列表失败: "s + memberListStr).c_str());
 		return "";
 	}
 	return "";
