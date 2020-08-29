@@ -621,9 +621,9 @@ CQAPI(const char*, OQ_Create, 0)()
 		;
 	}
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.7\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.8\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.7}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.0.8}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
@@ -1698,7 +1698,7 @@ CQAPI(int32_t, CQ_setGroupAdmin, 24)(int32_t plugin_id, int64_t group, int64_t a
 {
 	// https://qinfo.clt.qq.com/cgi-bin/qun_info/set_group_admin
 	XQAPI::OutPutLog((plugins[plugin_id].file + "调用了不支持的API CQ_setAdmin").c_str());
-	//XQAPI::SetAdmin(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(account).c_str(), admin);
+	// XQAPI::SetAdmin(robotQQ.c_str(), std::to_string(group).c_str(), std::to_string(account).c_str(), admin);
 	return 0;
 }
 
