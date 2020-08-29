@@ -567,12 +567,13 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			}
 			BOOL ret = TrackPopupMenuEx(
 				hMenu,
-				TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_LEFTBUTTON | TPM_NOANIMATION,
+				TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_LEFTBUTTON,
 				curpos.x,
 				curpos.y,
 				m_hwnd,
 				nullptr
 			);
+			DestroyMenu(hMenu);
 			if (ret)
 			{
 				const auto m = IntMethod(plugins[SelectedIndex].menus[ret - 1].second);
@@ -581,7 +582,6 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 					m();
 				}
 			}
-			DestroyMenu(hMenu);
 		}
 		return 0;
 		case ID_MASTER_BUTTONRELOAD:
