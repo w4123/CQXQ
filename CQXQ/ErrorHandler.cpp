@@ -214,7 +214,7 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	config.pszMainIcon = TD_ERROR_ICON;
 	config.pszMainInstruction = L"CQXQ 运行中遇到错误, 这可能是CQXQ本身或是某个插件导致的";
 
-	std::wstring expInfo = ConvertEncoding<wchar_t>(expInformation(ExceptionInfo, true, ExceptionInfo->ExceptionRecord->ExceptionCode), "gb18030", "utf-16le");
+	std::wstring expInfo = GB18030toUTF16(expInformation(ExceptionInfo, true, ExceptionInfo->ExceptionRecord->ExceptionCode));
 	config.pszContent = expInfo.c_str();
 
 	constexpr int NUM_OF_BUTTONS = 4;
@@ -241,7 +241,7 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	config.pRadioButtons = nullptr;
 	config.nDefaultRadioButton = 0;
 	config.pszVerificationText = nullptr;
-	std::wstring stkInfo = ConvertEncoding<wchar_t>(formatStack(ExceptionInfo->ContextRecord), "gb18030", "utf-16le");
+	std::wstring stkInfo = GB18030toUTF16(formatStack(ExceptionInfo->ContextRecord));
 	config.pszExpandedInformation = stkInfo.c_str();
 	config.pszExpandedControlText = L"隐藏";
 	config.pszCollapsedControlText = L"详细信息";

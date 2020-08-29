@@ -33,3 +33,7 @@ std::basic_string<T> ConvertEncoding(const std::basic_string<Q>& in, const std::
 std::string UTF8toGB18030(const std::string& strUTF8);
 
 std::string GB18030toUTF8(const std::string& strGB18030);
+
+std::wstring GB18030toUTF16(const std::string& strGB18030);
+
+std::string UTF16toGB18030(const std::wstring& strUTF16);

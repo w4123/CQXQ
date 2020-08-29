@@ -497,7 +497,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (SelectedIndex == -1)
 			{
-				MessageBoxA(m_hwnd, "请先双击左侧列表选择一个插件!", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "请先单击左侧列表选择一个插件!", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (plugins[SelectedIndex].enabled)
@@ -542,7 +542,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (SelectedIndex == -1)
 			{
-				MessageBoxA(m_hwnd, "请先双击左侧列表选择一个插件!", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "请先单击左侧列表选择一个插件!", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (!plugins[SelectedIndex].enabled)
@@ -621,14 +621,14 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		switch (reinterpret_cast<LPNMHDR>(lParam)->code)
 		{
-		case LVN_ITEMACTIVATE:
+		case LVN_ITEMCHANGED:
 		{
 			if (reinterpret_cast<LPNMHDR>(lParam)->idFrom == ID_MASTER_LVPLUGIN)
 			{
-				auto lpnmitem = reinterpret_cast<LPNMITEMACTIVATE>(lParam);
-				if (lpnmitem->iItem != -1)
+				LPNMLISTVIEW pnmv = reinterpret_cast<LPNMLISTVIEW>(lParam);
+				if (pnmv->iItem != -1 && !(pnmv->uOldState & LVIS_SELECTED) && (pnmv->uNewState & LVIS_SELECTED))
 				{
-					std::string text = ListViewPlugin.GetItemText(lpnmitem->iItem);
+					std::string text = ListViewPlugin.GetItemText(pnmv->iItem);
 					SelectedIndex = std::stoi(text);
 					StaticDesc.SetText(plugins[SelectedIndex].description);
 					if (plugins[SelectedIndex].enabled)
@@ -667,7 +667,7 @@ LRESULT GUI::CreateMainPage()
 	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "停止接收来自自己的事件" : "开始接收来自自己的事件", WS_CHILD | WS_VISIBLE, 0,
 		400, 320, 270, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRECVSELFMSG));
 
-	StaticDesc.Create("双击左侧列表选择一个插件",
+	StaticDesc.Create("单击左侧列表选择一个插件",
 		WS_CHILD | WS_VISIBLE, 0,
 		400, 30, 270, 200, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_STATICDESC));
 
@@ -678,7 +678,7 @@ LRESULT GUI::CreateMainPage()
 		355, 426,
 		m_hwnd,
 		reinterpret_cast<HMENU>(ID_MASTER_LVPLUGIN));
-	ListViewPlugin.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_TWOCLICKACTIVATE | LVS_EX_FULLROWSELECT);
+	ListViewPlugin.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT);
 
 	ListViewPlugin.AddAllTextColumn(std::vector<std::pair<std::string, int>>{ {"ID", 50}, { "名称", 300 }, { "作者", 200 }, { "版本", 200 }});
 	int index = 0;
