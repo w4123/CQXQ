@@ -21,6 +21,7 @@
 #include "EncodingConvert.h"
 #include <regex>
 #include "RichMessage.h"
+#include "ErrorHandler.h"
 
 using namespace std;
 
@@ -61,16 +62,15 @@ namespace XQAPI
 
 	void initFuncs(const HMODULE& hModule)
 	{
-		try
+		__try
 		{
 			for (const auto& initializer : apiFuncInitializers) {
 				initializer(hModule);
 			}
 		}
-		catch (std::runtime_error& e)
+		__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
 		{
-			MessageBoxA(nullptr, ("CQXQ初始化API致命错误，请检查你的先驱版本！程序即将退出: "s + e.what()).c_str(), "CQXQ错误", MB_OK);
-			exit(-1);
+			;
 		}
 	}
 
@@ -84,7 +84,7 @@ namespace XQAPI
 	} \
     static bool _init_##Name = addFuncInit( [] (const auto& hModule) { \
         _##Name = reinterpret_cast<Name##_TYPE>(GetProcAddress(hModule, "Api_" #Name)); \
-        if (!_##Name) throw std::runtime_error("Unable to initialize API Function " #Name); \
+        if (!_##Name) throw std::exception("Unable to initialize API Function " #Name); \
     });
 
 	XQAPI(SendMsg, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId)
@@ -513,11 +513,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	return TRUE;
 }
 
-#ifdef XQ
-CQAPI(const char*, XQ_Create, 4)(const char* ver)
-#else
-CQAPI(const char*, OQ_Create, 0)()
-#endif
+void CQXQ_init()
 {
 	// 获取文件目录
 	char path[MAX_PATH];
@@ -547,7 +543,7 @@ CQAPI(const char*, OQ_Create, 0)()
 	{
 		std::string rscStr(rscPtr, size);
 		ofstream ofCQP(rootPath + "\\CQP.dll", ios::out | ios::trunc | ios::binary);
-		if (ofCQP) 
+		if (ofCQP)
 		{
 			ofCQP << rscStr;
 			XQAPI::OutPutLog("写出CQP.dll成功");
@@ -607,6 +603,23 @@ CQAPI(const char*, OQ_Create, 0)()
 			memFreeQueue.pop();
 		}
 	});
+}
+
+
+#ifdef XQ
+CQAPI(const char*, XQ_Create, 4)(const char* ver)
+#else
+CQAPI(const char*, OQ_Create, 0)()
+#endif
+{
+	__try
+	{
+		CQXQ_init();
+	}
+	__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
+	{
+		;
+	}
 #ifdef XQ
 	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.7\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
@@ -614,17 +627,30 @@ CQAPI(const char*, OQ_Create, 0)()
 #endif
 }
 
+
 #ifdef XQ
 CQAPI(int32_t, XQ_DestroyPlugin, 0)()
 #else
 CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 #endif
 {
-	FreeLibrary(XQHModule);
-	FreeLibrary(CQPHModule);
-	memFreeThreadShouldRun = false;
-	memFreeThread->join();
-	memFreeThread.reset(nullptr);
+	__try
+	{
+		for (auto& plugin : plugins)
+		{
+			FreeLibrary(plugin.dll);
+		}
+		FreeLibrary(XQHModule);
+		FreeLibrary(CQPHModule);
+		memFreeThreadShouldRun = false;
+		memFreeThread->join();
+		memFreeThread.reset(nullptr);
+	}
+	__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
+	{
+		;
+	}
+
 	return 0;
 }
 
@@ -634,14 +660,13 @@ CQAPI(int32_t, XQ_SetUp, 0)()
 CQAPI(int32_t, OQ_SetUp, 0)()
 #endif
 {
-	try
+	__try
 	{
 		GUIMain();
 	}
-	catch (std::exception& e)
+	__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
 	{
-		XQAPI::OutPutLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
-		MessageBoxA(nullptr, ("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str(), "CQXQ 错误", MB_OK);
+		;
 	}
 	return 0;
 }
@@ -665,407 +690,412 @@ struct FakeMsgId
 	long long msgId;
 };
 
+int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
+{
+	std::string botQQStr = botQQ ? botQQ : "";
+	if (robotQQ.empty()) robotQQ = botQQStr;
+	if (!botQQStr.empty() && robotQQ != botQQStr) return 0;
+	if (msgType == XQ_Load)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventStartup])
+		{
+			const auto startup = IntMethod(plugin.event);
+			if (startup)
+			{
+				startup();
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_Exit)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventExit])
+		{
+			const auto exit = IntMethod(plugin.event);
+			if (exit)
+			{
+				exit();
+			}
+		}
+	}
+	if (msgType == XQ_Enable)
+	{
+		const char* onlineList = XQAPI::GetOnLineList();
+		std::string onlineListStr = onlineList ? onlineList : "";
+
+		if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
+		{
+			for (const auto& plugin : plugins_events[CQ_eventEnable])
+			{
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto enable = IntMethod(plugin.event);
+				if (enable)
+				{
+					enable();
+				}
+			}
+			EnabledEventCalled = true;
+		}
+		return 0;
+	}
+	if (msgType == XQ_LogInComplete)
+	{
+		if (!EnabledEventCalled && XQAPI::IsEnable())
+		{
+			for (const auto& plugin : plugins_events[CQ_eventEnable])
+			{
+				if (!plugins[plugin.plugin_id].enabled) continue;
+				const auto enable = IntMethod(plugin.event);
+				if (enable)
+				{
+					enable();
+				}
+			}
+			EnabledEventCalled = true;
+		}
+		return 0;
+	}
+	if (msgType == XQ_Disable)
+	{
+		if (!EnabledEventCalled) return 0;
+		EnabledEventCalled = false;
+		for (const auto& plugin : plugins_events[CQ_eventDisable])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto disable = IntMethod(plugin.event);
+			if (disable)
+			{
+				disable();
+			}
+		}
+		return 0;
+	}
+
+	// 如果不接收来自自己的事件, 直接退出函数
+	if (activeQQ && !RecvSelfEvent && activeQQ == robotQQ)
+	{
+		return 0;
+	}
+
+	if (msgType == XQ_FriendMsgEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto privMsg = EvPriMsg(plugin.event);
+			if (privMsg)
+			{
+				if (privMsg(11, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupTmpMsgEvent)
+	{
+		UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto privMsg = EvPriMsg(plugin.event);
+			if (privMsg)
+			{
+				if (privMsg(2, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+	}
+	if (msgType == XQ_GroupMsgEvent)
+	{
+		UserGroupCache[stoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventGroupMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto groupMsg = EvGroupMsg(plugin.event);
+			if (groupMsg)
+			{
+				FakeMsgId id{ atoll(sourceId), atoll(msgNum), atoll(msgId) };
+				if (groupMsg(1, (int32_t)&id, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_DiscussTmpMsgEvent)
+	{
+		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto privMsg = EvPriMsg(plugin.event);
+			if (privMsg)
+			{
+				if (privMsg(3, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+	}
+	if (msgType == XQ_DiscussMsgEvent)
+	{
+		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventDiscussMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvDiscussMsg(plugin.event);
+			if (event)
+			{
+				if (event(1, atoi(msgId), atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupInviteReqEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto invited = EvRequestAddGroup(plugin.event);
+			if (invited)
+			{
+				Unpack p;
+				p.add(XQ_GroupInviteReqEvent);
+				p.add(sourceId);
+				p.add(activeQQ);
+				p.add(rawMsg);
+				if (invited(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupAddReqEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto addReq = EvRequestAddGroup(plugin.event);
+			if (addReq)
+			{
+				Unpack p;
+				p.add(XQ_GroupAddReqEvent);
+				p.add(sourceId);
+				p.add(activeQQ);
+				p.add(rawMsg);
+				if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupInviteOtherReqEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto addReq = EvRequestAddGroup(plugin.event);
+			if (addReq)
+			{
+				Unpack p;
+				p.add(XQ_GroupInviteOtherReqEvent);
+				p.add(sourceId);
+				p.add(activeQQ);
+				p.add(rawMsg);
+				const string CQInviteMsg = "邀请人：[CQ:at,qq="s + activeQQ + "]" + (msg ? (" 附言："s + msg) : "");
+				if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ), CQInviteMsg.c_str(), base64_encode(p.getAll()).c_str())) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_FriendAddReqEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventRequest_AddFriend])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto addReq = EvRequestAddFriend(plugin.event);
+			if (addReq)
+			{
+				if (addReq(1, atoi(timeStamp), atoll(activeQQ), msg, activeQQ)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupBanEvent)
+	{
+		int banTime = 0;
+		std::string banTimeStr = msg ? msg : "";
+		regex banTimeRegex("([0-9]+)天([0-9]+)时([0-9]+)分([0-9]+)秒", regex::ECMAScript);
+		smatch m;
+		if (regex_search(banTimeStr, m, banTimeRegex))
+		{
+			banTime = std::stoi(m[1]) * 86400 + std::stoi(m[2]) * 3600 + std::stoi(m[3]) * 60 + std::stoi(m[4]);
+		}
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto ban = EvGroupBan(plugin.event);
+			if (ban)
+			{
+				if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), banTime)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupUnbanEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto ban = EvGroupBan(plugin.event);
+			if (ban)
+			{
+				if (ban(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupWholeBanEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto ban = EvGroupBan(plugin.event);
+			if (ban)
+			{
+				if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupWholeUnbanEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto ban = EvGroupBan(plugin.event);
+			if (ban)
+			{
+				if (ban(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupMemberIncreaseByApply)
+	{
+		GroupMemberCache.erase(atoll(sourceId));
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberIncrease])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto MbrInc = EvGroupMember(plugin.event);
+			if (MbrInc)
+			{
+				if (MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupMemberIncreaseByInvite)
+	{
+		GroupMemberCache.erase(atoll(sourceId));
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberIncrease])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto MbrInc = EvGroupMember(plugin.event);
+			if (MbrInc)
+			{
+				if (MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupMemberDecreaseByExit)
+	{
+		GroupMemberCache.erase(atoll(sourceId));
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberDecrease])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvGroupMember(plugin.event);
+			if (event)
+			{
+				if (event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ)))  break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupMemberDecreaseByKick)
+	{
+		GroupMemberCache.erase(atoll(sourceId));
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberDecrease])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvGroupMember(plugin.event);
+			if (event)
+			{
+				if (passiveQQ == robotQQ)
+				{
+					if (event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
+				}
+				else
+				{
+					if (event(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
+				}
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupAdminSet)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvGroupAdmin(plugin.event);
+			if (event)
+			{
+				if (event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ))) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupAdminUnset)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvGroupAdmin(plugin.event);
+			if (event)
+			{
+				if (event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ))) break;
+			}
+		}
+		return 0;
+	}
+	// 根据酷Q逻辑，只有不经过酷Q处理的好友添加事件（即比如用户设置了同意一切好友请求）才会调用好友已添加事件
+	if (msgType == XQ_FriendAddedEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventFriend_Add])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvFriendAdd(plugin.event);
+			if (event)
+			{
+				if (event(1, atoi(timeStamp), atoll(activeQQ))) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_groupCardChange)
+	{
+		GroupMemberCache.erase(atoll(sourceId));
+	}
+	return 0;
+}
+
 #ifdef XQ
 CQAPI(int32_t, XQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 #else
 CQAPI(int32_t, OQ_Event, 48)(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 #endif
 {
-	try {
-		std::string botQQStr = botQQ ? botQQ : "";
-		if (robotQQ.empty()) robotQQ = botQQStr;
-		if (!botQQStr.empty() && robotQQ != botQQStr) return 0;
-		if (msgType == XQ_Load)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventStartup])
-			{
-				const auto startup = IntMethod(plugin.event);
-				if (startup)
-				{
-					startup();
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_Exit)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventExit])
-			{
-				const auto exit = IntMethod(plugin.event);
-				if (exit)
-				{
-					exit();
-				}
-			}
-		}
-		if (msgType == XQ_Enable)
-		{
-			const char* onlineList = XQAPI::GetOnLineList();
-			std::string onlineListStr = onlineList ? onlineList : "";
-
-			if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
-			{
-				for (const auto& plugin : plugins_events[CQ_eventEnable])
-				{
-					if (!plugins[plugin.plugin_id].enabled) continue;
-					const auto enable = IntMethod(plugin.event);
-					if (enable)
-					{
-						enable();
-					}
-				}
-				EnabledEventCalled = true;
-			}
-			return 0;
-		}
-		if (msgType == XQ_LogInComplete)
-		{
-			if (!EnabledEventCalled && XQAPI::IsEnable())
-			{
-				for (const auto& plugin : plugins_events[CQ_eventEnable])
-				{
-					if (!plugins[plugin.plugin_id].enabled) continue;
-					const auto enable = IntMethod(plugin.event);
-					if (enable)
-					{
-						enable();
-					}
-				}
-				EnabledEventCalled = true;
-			}
-			return 0;
-		}
-		if (msgType == XQ_Disable)
-		{
-			if (!EnabledEventCalled) return 0;
-			EnabledEventCalled = false;
-			for (const auto& plugin : plugins_events[CQ_eventDisable])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto disable = IntMethod(plugin.event);
-				if (disable)
-				{
-					disable();
-				}
-			}
-			return 0;
-		}
-
-		// 如果不接收来自自己的事件, 直接退出函数
-		if (activeQQ && !RecvSelfEvent && activeQQ == robotQQ)
-		{
-			return 0;
-		}
-
-		if (msgType == XQ_FriendMsgEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto privMsg = EvPriMsg(plugin.event);
-				if (privMsg)
-				{
-					if (privMsg(11, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupTmpMsgEvent)
-		{
-			UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto privMsg = EvPriMsg(plugin.event);
-				if (privMsg)
-				{
-					if (privMsg(2, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-				}
-			}
-		}
-		if (msgType == XQ_GroupMsgEvent)
-		{
-			UserGroupCache[stoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins_events[CQ_eventGroupMsg])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto groupMsg = EvGroupMsg(plugin.event);
-				if (groupMsg)
-				{
-					FakeMsgId id{ atoll(sourceId), atoll(msgNum), atoll(msgId) };
-					if (groupMsg(1, (int32_t)&id, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_DiscussTmpMsgEvent)
-		{
-			UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto privMsg = EvPriMsg(plugin.event);
-				if (privMsg)
-				{
-					if (privMsg(3, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-				}
-			}
-		}
-		if (msgType == XQ_DiscussMsgEvent)
-		{
-			UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
-			for (const auto& plugin : plugins_events[CQ_eventDiscussMsg])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto event = EvDiscussMsg(plugin.event);
-				if (event)
-				{
-					if (event(1, atoi(msgId), atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupInviteReqEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto invited = EvRequestAddGroup(plugin.event);
-				if (invited)
-				{
-					Unpack p;
-					p.add(XQ_GroupInviteReqEvent);
-					p.add(sourceId);
-					p.add(activeQQ);
-					p.add(rawMsg);
-					if (invited(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupAddReqEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto addReq = EvRequestAddGroup(plugin.event);
-				if (addReq)
-				{
-					Unpack p;
-					p.add(XQ_GroupAddReqEvent);
-					p.add(sourceId);
-					p.add(activeQQ);
-					p.add(rawMsg);
-					if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupInviteOtherReqEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto addReq = EvRequestAddGroup(plugin.event);
-				if (addReq)
-				{
-					Unpack p;
-					p.add(XQ_GroupInviteOtherReqEvent);
-					p.add(sourceId);
-					p.add(activeQQ);
-					p.add(rawMsg);
-					const string CQInviteMsg = "邀请人：[CQ:at,qq="s + activeQQ + "]" + (msg ? (" 附言："s + msg) : "");
-					if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ), CQInviteMsg.c_str(), base64_encode(p.getAll()).c_str())) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_FriendAddReqEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventRequest_AddFriend])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto addReq = EvRequestAddFriend(plugin.event);
-				if (addReq)
-				{
-					if (addReq(1, atoi(timeStamp), atoll(activeQQ), msg, activeQQ)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupBanEvent)
-		{
-			int banTime = 0;
-			std::string banTimeStr = msg ? msg : "";
-			regex banTimeRegex("([0-9]+)天([0-9]+)时([0-9]+)分([0-9]+)秒", regex::ECMAScript);
-			smatch m;
-			if (regex_search(banTimeStr, m, banTimeRegex))
-			{
-				banTime = std::stoi(m[1]) * 86400 + std::stoi(m[2]) * 3600 + std::stoi(m[3]) * 60 + std::stoi(m[4]);
-			}
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto ban = EvGroupBan(plugin.event);
-				if (ban)
-				{
-					if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), banTime)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupUnbanEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto ban = EvGroupBan(plugin.event);
-				if (ban)
-				{
-					if (ban(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ), 0)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupWholeBanEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto ban = EvGroupBan(plugin.event);
-				if (ban)
-				{
-					if (ban(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupWholeUnbanEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupBan])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto ban = EvGroupBan(plugin.event);
-				if (ban)
-				{
-					if (ban(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), 0, 0)) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupMemberIncreaseByApply)
-		{
-			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberIncrease])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto MbrInc = EvGroupMember(plugin.event);
-				if (MbrInc)
-				{
-					if (MbrInc(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupMemberIncreaseByInvite)
-		{
-			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberIncrease])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto MbrInc = EvGroupMember(plugin.event);
-				if (MbrInc)
-				{
-					if (MbrInc(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupMemberDecreaseByExit)
-		{
-			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberDecrease])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto event = EvGroupMember(plugin.event);
-				if (event)
-				{
-					if (event(1, atoi(timeStamp), atoll(sourceId), 0, atoll(passiveQQ)))  break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupMemberDecreaseByKick)
-		{
-			GroupMemberCache.erase(atoll(sourceId));
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupMemberDecrease])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto event = EvGroupMember(plugin.event);
-				if (event)
-				{
-					if (passiveQQ == robotQQ)
-					{
-						if (event(3, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
-					}
-					else
-					{
-						if (event(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), atoll(passiveQQ))) break;
-					}
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupAdminSet)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto event = EvGroupAdmin(plugin.event);
-				if (event)
-				{
-					if (event(2, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ))) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_GroupAdminUnset)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto event = EvGroupAdmin(plugin.event);
-				if (event)
-				{
-					if (event(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ))) break;
-				}
-			}
-			return 0;
-		}
-		// 根据酷Q逻辑，只有不经过酷Q处理的好友添加事件（即比如用户设置了同意一切好友请求）才会调用好友已添加事件
-		if (msgType == XQ_FriendAddedEvent)
-		{
-			for (const auto& plugin : plugins_events[CQ_eventFriend_Add])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto event = EvFriendAdd(plugin.event);
-				if (event)
-				{
-					if (event(1, atoi(timeStamp), atoll(activeQQ))) break;
-				}
-			}
-			return 0;
-		}
-		if (msgType == XQ_groupCardChange)
-		{
-			GroupMemberCache.erase(atoll(sourceId));
-		}
-		return 0;
-	}
-	catch (std::exception& e)
+	__try 
 	{
-		XQAPI::OutPutLog(("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str());
-		MessageBoxA(nullptr, ("CQXQ遇到严重错误, 这可能是CQXQ本身或是其中的某个插件导致的\n错误信息："s + e.what()).c_str(), "CQXQ 错误", MB_OK);
+		return CQXQ_process(botQQ, msgType, subType, sourceId, activeQQ, passiveQQ, msg, msgNum, msgId, rawMsg, timeStamp, retText);
+	}
+	__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
+	{
+		;
 	}
 	return 0;
 }

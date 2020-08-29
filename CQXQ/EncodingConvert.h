@@ -8,10 +8,10 @@ std::basic_string<T> ConvertEncoding(const std::basic_string<Q>& in, const std::
 	const auto cd = iconv_open(OutEnc.c_str(), InEnc.c_str());
 	if (cd == (iconv_t)-1)
 	{
-		return "";
+		return std::basic_string<T>();
 	}
 	size_t in_len = in.size() * sizeof(Q);
-	size_t out_len = size_t(in_len * CapFac + 1);
+	size_t out_len = size_t(in_len * CapFac + sizeof(T));
 	const char* in_ptr = reinterpret_cast<const char*> (in.c_str());
 	char* out_ptr = new char[out_len];
 
@@ -21,9 +21,9 @@ std::basic_string<T> ConvertEncoding(const std::basic_string<Q>& in, const std::
 	{
 		delete[] out_ptr_copy;
 		iconv_close(cd);
-		return "";
+		return std::basic_string<T>();
 	}
-	*out_ptr = '\0';
+	memset(out_ptr, 0, sizeof(T));
 	std::basic_string<T> ret(reinterpret_cast<T*>(out_ptr_copy));
 	delete[] out_ptr_copy;
 	iconv_close(cd);
