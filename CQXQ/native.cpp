@@ -770,81 +770,6 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 		}
 		return 0;
 	}
-
-	// 如果不接收来自自己的事件, 直接退出函数
-	if (activeQQ && !RecvSelfEvent && activeQQ == robotQQ)
-	{
-		return 0;
-	}
-
-	if (msgType == XQ_FriendMsgEvent)
-	{
-		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
-		{
-			if (!plugins[plugin.plugin_id].enabled) continue;
-			const auto privMsg = EvPriMsg(plugin.event);
-			if (privMsg)
-			{
-				if (privMsg(11, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_GroupTmpMsgEvent)
-	{
-		UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
-		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
-		{
-			if (!plugins[plugin.plugin_id].enabled) continue;
-			const auto privMsg = EvPriMsg(plugin.event);
-			if (privMsg)
-			{
-				if (privMsg(2, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-			}
-		}
-	}
-	if (msgType == XQ_GroupMsgEvent)
-	{
-		UserGroupCache[stoll(activeQQ)] = atoll(sourceId);
-		for (const auto& plugin : plugins_events[CQ_eventGroupMsg])
-		{
-			if (!plugins[plugin.plugin_id].enabled) continue;
-			const auto groupMsg = EvGroupMsg(plugin.event);
-			if (groupMsg)
-			{
-				FakeMsgId id{ atoll(sourceId), atoll(msgNum), atoll(msgId) };
-				if (groupMsg(1, (int32_t)&id, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
-			}
-		}
-		return 0;
-	}
-	if (msgType == XQ_DiscussTmpMsgEvent)
-	{
-		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
-		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
-		{
-			if (!plugins[plugin.plugin_id].enabled) continue;
-			const auto privMsg = EvPriMsg(plugin.event);
-			if (privMsg)
-			{
-				if (privMsg(3, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-			}
-		}
-	}
-	if (msgType == XQ_DiscussMsgEvent)
-	{
-		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
-		for (const auto& plugin : plugins_events[CQ_eventDiscussMsg])
-		{
-			if (!plugins[plugin.plugin_id].enabled) continue;
-			const auto event = EvDiscussMsg(plugin.event);
-			if (event)
-			{
-				if (event(1, atoi(msgId), atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
-			}
-		}
-		return 0;
-	}
 	if (msgType == XQ_GroupInviteReqEvent)
 	{
 		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
@@ -1079,6 +1004,81 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 	if (msgType == XQ_groupCardChange)
 	{
 		GroupMemberCache.erase(atoll(sourceId));
+	}
+
+	// 如果不接收来自自己的事件, 直接退出函数
+	if (activeQQ && !RecvSelfEvent && activeQQ == robotQQ)
+	{
+		return 0;
+	}
+
+	if (msgType == XQ_FriendMsgEvent)
+	{
+		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto privMsg = EvPriMsg(plugin.event);
+			if (privMsg)
+			{
+				if (privMsg(11, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_GroupTmpMsgEvent)
+	{
+		UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto privMsg = EvPriMsg(plugin.event);
+			if (privMsg)
+			{
+				if (privMsg(2, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+	}
+	if (msgType == XQ_GroupMsgEvent)
+	{
+		UserGroupCache[stoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventGroupMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto groupMsg = EvGroupMsg(plugin.event);
+			if (groupMsg)
+			{
+				FakeMsgId id{ atoll(sourceId), atoll(msgNum), atoll(msgId) };
+				if (groupMsg(1, (int32_t)&id, atoll(sourceId), atoll(activeQQ), "", parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+		return 0;
+	}
+	if (msgType == XQ_DiscussTmpMsgEvent)
+	{
+		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto privMsg = EvPriMsg(plugin.event);
+			if (privMsg)
+			{
+				if (privMsg(3, atoi(msgId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+	}
+	if (msgType == XQ_DiscussMsgEvent)
+	{
+		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+		for (const auto& plugin : plugins_events[CQ_eventDiscussMsg])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvDiscussMsg(plugin.event);
+			if (event)
+			{
+				if (event(1, atoi(msgId), atoll(sourceId), atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+			}
+		}
+		return 0;
 	}
 	return 0;
 }
