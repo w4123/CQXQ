@@ -37,7 +37,7 @@ typedef int32_t (__stdcall* EvFriendAdd)(int32_t, int32_t, int64_t);
 
 #define XQ_GroupInviteReqEvent 214
 #define XQ_GroupAddReqEvent 213
-#define XQ_GroupInviteOtherReqEvent 215 // 这个好像不正确
+#define XQ_GroupInviteOtherReqEvent 215 
 
 #define XQ_GroupMemberIncreaseByApply 212
 #define XQ_GroupMemberIncreaseByInvite 219
