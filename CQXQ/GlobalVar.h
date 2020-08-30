@@ -9,7 +9,7 @@ extern HMODULE hDllModule;
 
 struct eventType
 {
-	int plugin_id;
+	int plugin_id = -1;
 	int priority = 30000;
 	FARPROC event = nullptr;
 	bool operator<(const eventType& that) const

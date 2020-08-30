@@ -550,9 +550,16 @@ void CQXQ_init()
 
 	// 写出CQP.dll
 	HRSRC rscInfo = FindResourceA(hDllModule, MAKEINTRESOURCEA(IDR_CQP1), "CQP");
-	HGLOBAL rsc = LoadResource(hDllModule, rscInfo);
-	DWORD size = SizeofResource(hDllModule, rscInfo);
-	char* rscPtr = (char*)LockResource(rsc);
+	HGLOBAL rsc = nullptr;
+	char* rscPtr = nullptr; 
+	DWORD size = 0;
+	if (rscInfo)
+	{
+		rsc = LoadResource(hDllModule, rscInfo);
+		size = SizeofResource(hDllModule, rscInfo);
+		if (rsc) rscPtr = (char*)LockResource(rsc);
+	}
+
 	if (rscPtr && size)
 	{
 		std::string rscStr(rscPtr, size);
@@ -1057,7 +1064,7 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 	}
 	if (msgType == XQ_GroupTmpMsgEvent)
 	{
-		UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
+		if (activeQQ && sourceId) UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
 		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1070,7 +1077,7 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 	}
 	if (msgType == XQ_GroupMsgEvent)
 	{
-		UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
+		if (activeQQ && sourceId) UserGroupCache[atoll(activeQQ)] = atoll(sourceId);
 		for (const auto& plugin : plugins_events[CQ_eventGroupMsg])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1085,7 +1092,7 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 	}
 	if (msgType == XQ_DiscussTmpMsgEvent)
 	{
-		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+		if (activeQQ && sourceId) UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
 		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1098,7 +1105,7 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 	}
 	if (msgType == XQ_DiscussMsgEvent)
 	{
-		UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
+		if (activeQQ && sourceId) UserDiscussCache[atoll(activeQQ)] = atoll(sourceId);
 		for (const auto& plugin : plugins_events[CQ_eventDiscussMsg])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;

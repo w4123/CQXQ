@@ -207,7 +207,7 @@ public:
 	// 长度最长为1000
 	[[nodiscard]] std::string GetItemText(int index, int subindex = 0)
 	{
-		char buffer[1000];
+		char buffer[1000]{};
 		ListView_GetItemText(hwnd, index, subindex, buffer, 1000);
 		return buffer;
 	}
