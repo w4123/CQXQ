@@ -724,6 +724,7 @@ struct FakeMsgId
 	long long msgNum;
 	long long msgId;
 };
+CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved);
 
 int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 {
@@ -1051,8 +1052,10 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 
 	if (msgType == XQ_FriendMsgEvent)
 	{
+		XQAPI::OutPutLog(CQ_getFriendList(0, 0));
 		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 		{
+			
 			if (!plugins[plugin.plugin_id].enabled) continue;
 			const auto privMsg = EvPriMsg(plugin.event);
 			if (privMsg)
@@ -1276,6 +1279,44 @@ CQAPI(int32_t, CQ_deleteMsg, 12)(int32_t plugin_id, int64_t msg_id)
 CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 {
 	std::string ret;
+	const char* frdLst = XQAPI::GetFriendList(to_string(robotQQ).c_str());
+	if (!frdLst)return "";
+	std::string friendList = frdLst;
+	Unpack p;
+	std::vector<Unpack> Friends;
+	int count = 0;
+	try
+	{
+		nlohmann::json j = nlohmann::json::parse(friendList);
+		for (const auto& item : j["result"])
+		{
+			for (const auto& member : item["mems"])
+			{
+				Unpack t;
+				t.add(member["uin"].get<long long>());
+				t.add(UTF8toGB18030(member["name"].get<std::string>()));
+				t.add("");
+				Friends.push_back(t);
+				count++;
+			}
+		}
+		p.add(count);
+		for (auto& g : Friends)
+		{
+			p.add(g);
+		}
+		ret = base64_encode(p.getAll());
+		return delayMemFreeCStr(ret.c_str());
+	}
+	catch(std::exception&)
+	{
+		return "";
+	}
+	return "";
+	
+
+	/*
+	std::string ret;
 	const char* frdLst = XQAPI::GetFriendList_B(to_string(robotQQ).c_str());
 	if (!frdLst) return "";
 	std::string friendList = frdLst;
@@ -1308,6 +1349,7 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 	}
 	ret = base64_encode(p.getAll());
 	return delayMemFreeCStr(ret.c_str());
+	*/
 }
 
 CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL disableCache)
