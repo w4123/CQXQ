@@ -1052,10 +1052,8 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 
 	if (msgType == XQ_FriendMsgEvent)
 	{
-		XQAPI::OutPutLog(CQ_getFriendList(0, 0));
 		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
 		{
-			
 			if (!plugins[plugin.plugin_id].enabled) continue;
 			const auto privMsg = EvPriMsg(plugin.event);
 			if (privMsg)
