@@ -679,7 +679,7 @@ CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 
 void CQXQ_GUI()
 {
-	fakeMainThread.push([](int) { GUIMain(); }).wait();
+	fakeMainThread.push([](int) { GUIMain(); });
 }
 
 #ifdef XQ
