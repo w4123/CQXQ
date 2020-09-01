@@ -419,7 +419,6 @@ public:
 	// Master
 
 	int SelectedIndex = -1;
-	atomic<int> numWindowOpen = 0;
 
 	BasicListView ListViewPlugin;
 	BasicStatic StaticDesc;
@@ -582,9 +581,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				const auto m = IntMethod(plugins[SelectedIndex].menus[ret - 1].second);
 				if (m)
 				{
-					numWindowOpen++;
 					m();
-					numWindowOpen--;
 				}
 			}
 		}
