@@ -3,6 +3,7 @@
 #include <Windows.h>
 #include <vector>
 #include <string>
+#include <atomic>
 #include <map>
 
 extern HMODULE hDllModule;
@@ -55,3 +56,6 @@ extern bool EnabledEventCalled;
 
 // 是否接收来自自己的事件
 extern bool RecvSelfEvent;
+
+// 是否在运行
+extern std::atomic<bool> running;

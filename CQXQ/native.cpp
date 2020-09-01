@@ -23,6 +23,7 @@
 #include "RichMessage.h"
 #include "ErrorHandler.h"
 #include <CommCtrl.h>
+#include <DbgHelp.h>
 
 using namespace std;
 
@@ -40,8 +41,6 @@ std::priority_queue<std::pair<std::time_t, const char*>> memFreeQueue;
 std::mutex memFreeMutex;
 
 std::unique_ptr<std::thread> memFreeThread;
-
-std::atomic<bool> memFreeThreadShouldRun = false;
 
 // 复制字符串, 返回复制后的字符串指针，字符串内存5分钟后释放
 const char* delayMemFreeCStr(const std::string& str)
@@ -508,6 +507,29 @@ std::string parseFromCQCode(int32_t uploadType, const char* targetId, const char
 	return ret;
 }
 
+std::string nickToCQCode(const std::string& msg)
+{
+	std::string ret;
+	std::regex match("(&nbsp;|\\[em\\](e[0-9]+)\\[\\/em\\])", std::regex::ECMAScript | std::regex::icase);
+	std::smatch m;
+	int last = 0;
+	while (regex_search(msg.begin() + last, msg.end(), m, match))
+	{
+		ret.append(m.prefix());
+		if (m[0].str()[0] == '&')
+		{
+			ret.append(" ");
+		}
+		else
+		{
+			ret.append("[CQ:image,url=http://qzonestyle.gtimg.cn/qzone/em/" + m[2].str() + ".gif]");
+		}
+		last += m.position() + m.length();
+	}
+	ret.append(msg.substr(last));
+	return ret;
+}
+
 BOOL APIENTRY DllMain(HMODULE hModule,
 	DWORD  ul_reason_for_call,
 	LPVOID lpReserved)
@@ -516,13 +538,43 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	return TRUE;
 }
 
+void MsgLoop();
+void MsgLoopWrapper(int)
+{
+	__try
+	{
+		MsgLoop();
+	}
+	__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
+	{
+		;
+	}
+}
+
+void MsgLoop()
+{
+	MSG msg{};
+	while (PeekMessageA(&msg, nullptr, 0, 0, PM_REMOVE))
+	{
+		TranslateMessage(&msg);
+		DispatchMessageA(&msg);
+	}
+	this_thread::sleep_for(5ms);
+	if (running) fakeMainThread.push(MsgLoopWrapper);
+}
 void CQXQ_init()
 {
+	// 调试用-加载符号
+	SymInitialize(GetCurrentProcess(), NULL, TRUE);
+	SymSetOptions(SYMOPT_LOAD_LINES);
+
 	// 获取文件目录
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
 	std::string pathStr(path);
 	rootPath = pathStr.substr(0, pathStr.rfind("\\"));
+
+	running = true;
 
 	// 初始化伪主线程
 	fakeMainThread.push([](int) { 
@@ -600,10 +652,9 @@ void CQXQ_init()
 	}
 
 	// 延迟字符串内存释放
-	memFreeThreadShouldRun = true;
 	memFreeThread = std::make_unique<std::thread>([]
 	{
-		while (memFreeThreadShouldRun)
+		while (running)
 		{
 			{
 				std::unique_lock lock(memFreeMutex);
@@ -624,6 +675,20 @@ void CQXQ_init()
 			memFreeQueue.pop();
 		}
 	});
+
+	fakeMainThread.push([](int)
+	{
+		__try
+		{
+			InitGUI();
+		}
+		__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
+		{
+			;
+		}
+	});
+	 
+	fakeMainThread.push(MsgLoopWrapper);
 }
 
 
@@ -656,14 +721,30 @@ void CQXQ_Uninit()
 	}
 	FreeLibrary(XQHModule);
 	FreeLibrary(CQPHModule);
-	memFreeThreadShouldRun = false;
+	running = false;
 	memFreeThread->join();
 	memFreeThread.reset(nullptr);
 	fakeMainThread.push([](int) {
+		DestroyMainWindow();
+		int bRet;
+		MSG msg{};
+		while ((bRet = GetMessageA(&msg, nullptr, 0, 0)) != 0)
+		{
+			if (bRet == -1)
+			{
+				break;
+			}
+			else
+			{
+				TranslateMessage(&msg);
+				DispatchMessageA(&msg);
+			}
+		}
 		OleUninitialize();
 	}).wait();
-	p.stop();
 	fakeMainThread.stop();
+	p.stop();
+	SymCleanup(GetCurrentProcess());
 }
 
 #ifdef XQ
@@ -684,11 +765,6 @@ CQAPI(int32_t, OQ_DestroyPlugin, 0)()
 	return 0;
 }
 
-void CQXQ_GUI()
-{
-	fakeMainThread.push([](int) { GUIMain(); });
-}
-
 #ifdef XQ
 CQAPI(int32_t, XQ_SetUp, 0)()
 #else
@@ -697,7 +773,7 @@ CQAPI(int32_t, OQ_SetUp, 0)()
 {
 	__try
 	{
-		CQXQ_GUI();
+		ShowMainWindowAsync();
 	}
 	__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
 	{
@@ -724,7 +800,6 @@ struct FakeMsgId
 	long long msgNum;
 	long long msgId;
 };
-CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved);
 
 int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 {
@@ -763,6 +838,10 @@ int CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char
 
 		if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
 		{
+			if (robotQQ == 0)
+			{
+				robotQQ = atoll(onlineList);
+			}
 			for (const auto& plugin : plugins_events[CQ_eventEnable])
 			{
 				if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1292,7 +1371,7 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 			{
 				Unpack t;
 				t.add(member["uin"].get<long long>());
-				t.add(UTF8toGB18030(member["name"].get<std::string>()));
+				t.add(nickToCQCode(UTF8toGB18030(member["name"].get<std::string>())));
 				t.add("");
 				Friends.push_back(t);
 				count++;
@@ -1516,8 +1595,8 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		Unpack t;
 		t.add(group);
 		t.add(account);
-		t.add(j["members"][accStr].count("nk") ? UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>()) : "");
-		t.add(j["members"][accStr].count("cd") ? UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>()) : "");
+		t.add(j["members"][accStr].count("nk") ? nickToCQCode(UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>())) : "");
+		t.add(j["members"][accStr].count("cd") ? nickToCQCode(UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>())) : "");
 		t.add(255);
 		t.add(-1);
 		/*
@@ -1619,8 +1698,8 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			Unpack t;
 			t.add(group);
 			t.add(qq);
-			t.add(member.value().count("nk") ? UTF8toGB18030(member.value()["nk"].get<std::string>()) : "");
-			t.add(member.value().count("cd") ? UTF8toGB18030(member.value()["cd"].get<std::string>()) : "");
+			t.add(member.value().count("nk") ? nickToCQCode(UTF8toGB18030(member.value()["nk"].get<std::string>())) : "");
+			t.add(member.value().count("cd") ? nickToCQCode(UTF8toGB18030(member.value()["cd"].get<std::string>())) : "");
 			t.add(255);
 			t.add(-1);
 			/*
@@ -1717,7 +1796,7 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	std::string accStr = std::to_string(account);
 	Unpack p;
 	p.add(account);
-	p.add(XQAPI::GetNick(to_string(robotQQ).c_str(), accStr.c_str()));
+	p.add(nickToCQCode(XQAPI::GetNick(to_string(robotQQ).c_str(), accStr.c_str())));
 	p.add(255);
 	p.add(-1);
 	/*

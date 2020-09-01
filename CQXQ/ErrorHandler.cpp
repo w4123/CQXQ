@@ -71,7 +71,8 @@ std::string seDescription(const exception_code_t& code)
 std::string expInformation(struct _EXCEPTION_POINTERS* ep, bool has_exception_code = false, exception_code_t code = 0)
 {
 	HMODULE hm;
-	GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, static_cast<LPCTSTR>(ep->ExceptionRecord->ExceptionAddress), &hm);
+	GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, 
+		static_cast<LPCTSTR>(ep->ExceptionRecord->ExceptionAddress), &hm);
 	MODULEINFO mi;
 	GetModuleInformation(GetCurrentProcess(), hm, &mi, sizeof(mi));
 	char fn[MAX_PATH];
@@ -135,8 +136,8 @@ std::string formatStack(CONTEXT* ctx) //Prints stack trace based on context reco
 	stack.AddrFrame.Offset = (*ctx).Ebp;
 	stack.AddrFrame.Mode = AddrModeFlat;
 #endif
-
-	SymInitialize(process, NULL, TRUE); //load symbols
+	
+	SymRefreshModuleList(process);
 
 	for (frame = 0; ; frame++)
 	{
@@ -164,33 +165,47 @@ std::string formatStack(CONTEXT* ctx) //Prints stack trace based on context reco
 		//get symbol name for address
 		pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 		pSymbol->MaxNameLen = MAX_SYM_NAME;
-		SymFromAddr(process, (ULONG64)stack.AddrPC.Offset, &displacement, pSymbol);
 
-		line = (IMAGEHLP_LINE64*)malloc(sizeof(IMAGEHLP_LINE64));
-		line->SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+		hModule = NULL;
+		lstrcpyA(module, "");
+		GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+			(LPCTSTR)(stack.AddrPC.Offset), &hModule);
 
-		//try to get line
-		if (SymGetLineFromAddr64(process, stack.AddrPC.Offset, &disp, line))
+		if (SymFromAddr(process, (ULONG64)stack.AddrPC.Offset, &displacement, pSymbol))
 		{
-			ret << "\tat " << pSymbol->Name << " in " << line->FileName << ": line: " << dec << line->LineNumber << ", address: 0x" << hex << pSymbol->Address << "\n";
+			line = (IMAGEHLP_LINE64*)malloc(sizeof(IMAGEHLP_LINE64));
+			if (line)
+			{
+				line->SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+				ret << "\tat " << pSymbol->Name;
+				//try to get line
+				if (SymGetLineFromAddr64(process, stack.AddrPC.Offset, &disp, line))
+				{
+					ret << " in " << line->FileName << ": line: " << dec << line->LineNumber;
+				}
+			}
+			ret << ", address 0x" << hex << (DWORD64)hModule << "+0x" << hex << pSymbol->Address - (DWORD64)hModule << "+0x" << hex << stack.AddrPC.Offset - pSymbol->Address;
+
+			free(line);
+			line = NULL;
 		}
 		else
 		{
-			//failed to get line
-			ret << "\tat " << pSymbol->Name << ", address 0x" << hex << pSymbol->Address;
-			hModule = NULL;
-			lstrcpyA(module, "");
-			GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-				(LPCTSTR)(stack.AddrPC.Offset), &hModule);
-
-			//at least print module name
-			if (hModule != NULL)GetModuleFileNameA(hModule, module, MaxNameLen);
-
-			ret << " in " << module << "\n";
+			ret << "\tat address 0x" << hex << (DWORD64)hModule << "+0x" << hex << stack.AddrPC.Offset - (DWORD64)hModule;
 		}
 
-		free(line);
-		line = NULL;
+
+		//at least print module name
+		if (hModule != NULL)
+		{
+			if (GetModuleFileNameA(hModule, module, MaxNameLen))
+			{
+				ret << " in " << module;
+			}
+		}
+
+		ret << endl;
+
 	}
 	return ret.str();
 }

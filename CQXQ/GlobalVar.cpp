@@ -4,6 +4,8 @@
 #include <vector>
 #include <string>
 #include <map>
+#include <atomic>
+#include "GUI.h"
 
 HMODULE hDllModule;
 
@@ -21,3 +23,6 @@ bool EnabledEventCalled = false;
 
 // 是否接收来自自己的事件
 bool RecvSelfEvent = false;
+
+// 是否在运行
+std::atomic<bool> running = false;

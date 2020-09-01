@@ -11,6 +11,7 @@
 #include <memory>
 #include <utility>
 #include <fstream>
+#include <thread>
 
 #include "GlobalVar.h"
 #include "native.h"
@@ -418,6 +419,7 @@ public:
 	// Master
 
 	int SelectedIndex = -1;
+	atomic<int> numWindowOpen = 0;
 
 	BasicListView ListViewPlugin;
 	BasicStatic StaticDesc;
@@ -462,7 +464,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		return 0;
 	}
 	case WM_CLOSE:
-		DestroyWindow(m_hwnd);
+		ShowWindow(m_hwnd, SW_HIDE);
 		return 0;
 
 	case WM_DESTROY:
@@ -472,6 +474,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			DeleteObject(font.second);
 		}
 		Fonts.clear();
+		m_hwnd = nullptr;
 		return 0;
 
 	case WM_PAINT:
@@ -579,7 +582,9 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				const auto m = IntMethod(plugins[SelectedIndex].menus[ret - 1].second);
 				if (m)
 				{
+					numWindowOpen++;
 					m();
+					numWindowOpen--;
 				}
 			}
 		}
@@ -697,8 +702,10 @@ LRESULT GUI::CreateMainPage()
 	return 0;
 }
 
+// GUI
+GUI MainWindow;
 
-int WINAPI GUIMain()
+int WINAPI InitGUI()
 {
 	// hDllModule不应为空
 	assert(hDllModule);
@@ -709,25 +716,23 @@ int WINAPI GUIMain()
 	icex.dwICC = ICC_STANDARD_CLASSES | ICC_LISTVIEW_CLASSES;
 	InitCommonControlsEx(&icex);
 
-	// 主GUI
-	GUI MainWindow;
-
 	if (!MainWindow.Create("CQXQ GUI", WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_BORDER | WS_CLIPSIBLINGS, 0,
 		CW_USEDEFAULT, CW_USEDEFAULT, 710, 500))
 	{
 		return 0;
 	}
 
-	ShowWindow(MainWindow.Window(), SW_SHOWDEFAULT);
-
-	// Run the message loop.
-
-	MSG msg = {};
-	while (GetMessageA(&msg, nullptr, 0, 0))
-	{
-		TranslateMessage(&msg);
-		DispatchMessageA(&msg);
-	}
-
+	ShowWindow(MainWindow.Window(), SW_HIDE);
 	return 0;
+}
+
+void ShowMainWindowAsync()
+{
+	ShowWindowAsync(MainWindow.Window(), SW_SHOW);
+	SetForegroundWindow(MainWindow.Window());
+}
+
+void DestroyMainWindow()
+{
+	DestroyWindow(MainWindow.Window());
 }
