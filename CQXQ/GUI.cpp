@@ -702,7 +702,7 @@ LRESULT GUI::CreateMainPage()
 // GUI
 GUI MainWindow;
 
-int WINAPI InitGUI()
+int __stdcall InitGUI()
 {
 	// hDllModule²»Ó¦Îª¿Õ
 	assert(hDllModule);
@@ -723,13 +723,13 @@ int WINAPI InitGUI()
 	return 0;
 }
 
-void ShowMainWindowAsync()
+void __stdcall ShowMainWindowAsync()
 {
 	ShowWindowAsync(MainWindow.Window(), SW_SHOW);
 	SetForegroundWindow(MainWindow.Window());
 }
 
-void DestroyMainWindow()
+void __stdcall DestroyMainWindow()
 {
 	DestroyWindow(MainWindow.Window());
 }
