@@ -65,10 +65,23 @@ API
 CQ码
 - [x] at
 - [x] image(file或者URL)
-- [x] record(只支持amr和silk文件)
+- [x] record(只支持silk文件或者接收到的{GUID}.amr)
 - [x] face
-- [x] emoji(只支持单向从cq码到emoji的转换)
-- [ ] 其他
+- [x] emoji(单向发送，接受还是[emoji=]的格式)
+- [x] share(单向发送)
+- [ ] contact
+- [ ] location
+- [ ] show
+- [ ] sign
+- [ ] rich
+- [ ] music
+- [ ] rps
+- [ ] dice
+- [ ] anonymous
+- [ ] shake
+- [ ] sface(受先驱限制无法支持)
+- [ ] bface(受先驱限制无法支持)
+
 
 GUI及管理
 - [x] 启用/禁用插件
