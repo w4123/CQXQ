@@ -72,13 +72,13 @@ CQ码
 - [ ] contact
 - [ ] location
 - [ ] show
-- [ ] sign
+- [ ] sign(受先驱限制无法支持)
 - [ ] rich
 - [ ] music
 - [ ] rps
 - [ ] dice
 - [ ] anonymous
-- [ ] shake
+- [x] shake
 - [ ] sface(受先驱限制无法支持)
 - [ ] bface(受先驱限制无法支持)
 
