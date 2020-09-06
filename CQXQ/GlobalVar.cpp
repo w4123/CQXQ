@@ -5,6 +5,7 @@
 #include <string>
 #include <map>
 #include <atomic>
+#include "ctpl_stl.h"
 #include "GUI.h"
 
 HMODULE hDllModule;
@@ -26,3 +27,11 @@ bool RecvSelfEvent = false;
 
 // 是否在运行
 std::atomic<bool> running = false;
+
+// 伪主线程
+ctpl::thread_pool fakeMainThread(1);
+
+// API调用线程
+ctpl::thread_pool p(4);
+
+std::atomic<long long> robotQQ;

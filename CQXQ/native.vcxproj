@@ -200,6 +200,7 @@
     <ClInclude Include="resource.h" />
     <ClInclude Include="RichMessage.h" />
     <ClInclude Include="Unpack.h" />
+    <ClInclude Include="XQAPI.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CQTools.cpp" />
