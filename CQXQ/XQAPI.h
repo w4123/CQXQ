@@ -126,6 +126,8 @@ void initFuncs(const HMODULE& hModule);
 
 	XQAPI(ShakeWindow, BOOL, const char* botQQ, const char* QQ)
 
+	XQAPI(GetAnon, BOOL, const char* botQQ, const char* groupId)
+
 	//XQAPI(GetAge, int32_t, const char* botQQ, const char* QQ)
 
 	//XQAPI(GetGender, int32_t, const char* botQQ, const char* QQ)

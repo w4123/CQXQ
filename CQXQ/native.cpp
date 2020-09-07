@@ -312,7 +312,7 @@ std::string parseToCQCode(const char* msg)
 
 
 // CQ码到XQ码
-std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char* QQ, const std::string& msg, int32_t bubbleID, BOOL isAnon, const char* json)
+std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char* QQ, const std::string& msg, int32_t bubbleID, BOOL isAnon, BOOL AnonIgnore, const char* json)
 {
 	if (msg.empty()) return "";
 	std::string_view msgStr(msg);
@@ -488,7 +488,41 @@ std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char
 	ret += msgStr.substr(last);
 	if (!ret.empty())
 	{
-		const char* rret = XQAPI::SendMsgEX_V2(std::to_string(robotQQ).c_str(), msgType, targetId, QQ, ret.c_str(), bubbleID, isAnon, json);
+		const char* rret;
+		if (msgType == 2 && isAnon && AnonIgnore)
+		{
+			if (XQAPI::GetAnon(std::to_string(robotQQ).c_str(), targetId))
+			{
+				// 尝试发送
+				rret = XQAPI::SendMsgEX_V2(std::to_string(robotQQ).c_str(), msgType, targetId, QQ, ret.c_str(), bubbleID, isAnon, json);
+				try
+				{
+					if (!rret || strcmp(rret, "") == 0)
+					{
+						throw std::exception();
+					}
+					nlohmann::json j = nlohmann::json::parse(rret);
+					if (!j["sendok"].get<bool>())
+					{
+						throw std::exception();
+					}
+				}
+				catch (std::exception&)
+				{
+					rret = XQAPI::SendMsgEX_V2(std::to_string(robotQQ).c_str(), msgType, targetId, QQ, ret.c_str(), bubbleID, FALSE, json);
+				}
+			}
+			else
+			{
+				// 没开启匿名
+				rret = XQAPI::SendMsgEX_V2(std::to_string(robotQQ).c_str(), msgType, targetId, QQ, ret.c_str(), bubbleID, FALSE, json);
+			}
+		}
+		else
+		{
+			rret = XQAPI::SendMsgEX_V2(std::to_string(robotQQ).c_str(), msgType, targetId, QQ, ret.c_str(), bubbleID, isAnon, json);
+		}
+		
 		return rret ? rret : "";
 	}
 	// 最开始非空但是解析CQ码以后为空说明其中的内容（卡片之类的）在前面被发送出去了，这个时候不应该返回失败，强制返回成功
@@ -696,7 +730,7 @@ void __stdcall CQXQ_init()
 		ExceptionWrapper(InitGUI)();
 	}).wait();
 	 
-	fakeMainThread.push([](int) {ExceptionWrapper(MsgLoop)(); });
+	fakeMainThread.push([](int) { ExceptionWrapper(MsgLoop)(); });
 }
 
 
@@ -1236,7 +1270,7 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 		XQAPI::OutPutLog(("无法发送消息给QQ" + accStr + ": 找不到可用的发送路径").c_str());
 		return -1;
 	}
-	ret = parseCQCodeAndSend(type, std::to_string(sourceId).c_str(), accStr.c_str(), msg, 0, FALSE, "");
+	ret = parseCQCodeAndSend(type, std::to_string(sourceId).c_str(), accStr.c_str(), msg, 0, FALSE, FALSE, "");
 	// 无法获取消息ID的强制成功，返回10e9
 	if (ret == "FORCESUC")
 	{
@@ -1262,8 +1296,28 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 {
 	if (robotQQ == 0) return -1;
 	if (!msg) return -1;
+
+	// 匿名判断
+	BOOL isAnon = FALSE;
+	BOOL AnonIgnore = FALSE;
+	std::string msgStr = msg;
+	if (msgStr.substr(0, 13) == "[CQ:anonymous")
+	{
+		size_t r = msgStr.find(']');
+		if (r != string::npos)
+		{
+			isAnon = TRUE;
+			std::string anonOptions = msgStr.substr(13, r - 13);
+			std::string ignore = retrieveSectionData(anonOptions, "ignore");
+			if (ignore == "true")
+			{
+				AnonIgnore = TRUE;
+			}
+			msgStr = msgStr.substr(r + 1);
+		}
+	}
 	std::string grpStr = std::to_string(group);
-	std::string ret = parseCQCodeAndSend(2, grpStr.c_str(), to_string(robotQQ).c_str(), msg, 0, FALSE, "");
+	std::string ret = parseCQCodeAndSend(2, grpStr.c_str(), to_string(robotQQ).c_str(), msgStr.c_str(), 0, isAnon, AnonIgnore, "");
 	// 无法获取消息ID的强制成功，返回10e9
 	if (ret == "FORCESUC")
 	{
@@ -1844,7 +1898,7 @@ CQAPI(int32_t, CQ_sendDiscussMsg, 16)(int32_t plugin_id, int64_t discuss, const 
 	if (robotQQ == 0) return -1;
 	if (!msg) return -1;
 	std::string discussStr = std::to_string(discuss);
-	std::string ret = parseCQCodeAndSend(3, discussStr.c_str(), to_string(robotQQ).c_str(), msg, 0, FALSE, "");
+	std::string ret = parseCQCodeAndSend(3, discussStr.c_str(), to_string(robotQQ).c_str(), msg, 0, FALSE, FALSE, "");
 	// 无法获取消息ID的强制成功，返回10e9
 	if (ret == "FORCESUC")
 	{
