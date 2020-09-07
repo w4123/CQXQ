@@ -56,7 +56,7 @@ std::mutex memFreeMsgIdMutex;
 
 std::map<size_t, FakeMsgId> msgIdMap;
 
-std::atomic<size_t> msgIdMapId = 0;
+std::atomic<size_t> msgIdMapId = 1;
 
 size_t newMsgId(const FakeMsgId& msgId)
 {
@@ -314,6 +314,7 @@ std::string parseToCQCode(const char* msg)
 // CQ码到XQ码
 std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char* QQ, const std::string& msg, int32_t bubbleID, BOOL isAnon, const char* json)
 {
+	if (msg.empty()) return "";
 	std::string_view msgStr(msg);
 	std::string ret;
 	size_t l = 0, r = 0, last = 0;
@@ -432,7 +433,15 @@ std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char
 			{
 				std::string idStr(msgStr.substr(l + 13, r - l - 13));
 				u32string u32_str;
-				u32_str.append({ static_cast<char32_t>(std::stoul(idStr)) });
+				if (idStr.substr(0, 6) == "100000")
+				{
+					u32_str.append({ static_cast<char32_t>(std::stoul(idStr.substr(6))), 0xFE0F, 0x20E3 });
+				}
+				else
+				{
+					u32_str.append({ static_cast<char32_t>(std::stoul(idStr)) });
+				}
+				
 				std::string utf8 = ConvertEncoding<char>(u32_str, "utf-32le", "utf-8");
 				std::stringstream stream;
 				for (char c : utf8)
@@ -463,6 +472,11 @@ std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char
 
 			XQAPI::SendXML(std::to_string(robotQQ).c_str(), 0, msgType, targetId, QQ, constructXMLShareMsg(url, title, content, image).c_str(), 0);
 		}
+		else if (msgType == 1 && msgStr.substr(l, 9) == "[CQ:shake")
+		{
+			//好友&抖动
+			XQAPI::ShakeWindow(std::to_string(robotQQ).c_str(), QQ);
+		}
 		else
 		{
 			ret += msgStr.substr(l, r - l + 1);
@@ -477,13 +491,14 @@ std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char
 		const char* rret = XQAPI::SendMsgEX_V2(std::to_string(robotQQ).c_str(), msgType, targetId, QQ, ret.c_str(), bubbleID, isAnon, json);
 		return rret ? rret : "";
 	}
-	return "";
+	// 最开始非空但是解析CQ码以后为空说明其中的内容（卡片之类的）在前面被发送出去了，这个时候不应该返回失败，强制返回成功
+	return "FORCESUC";
 }
 
 std::string nickToCQCode(const std::string& msg)
 {
 	std::string ret;
-	std::regex match("(&nbsp;|\\[em\\](e[0-9]+)\\[\\/em\\])", std::regex::ECMAScript | std::regex::icase);
+	std::regex match("(&nbsp;|\\[em\\](e[0-9]{1,6})\\[\\/em\\])", std::regex::ECMAScript | std::regex::icase);
 	std::smatch m;
 	int last = 0;
 	while (regex_search(msg.begin() + last, msg.end(), m, match)) 
@@ -495,7 +510,30 @@ std::string nickToCQCode(const std::string& msg)
 		} 
 		else
 		{
-			ret.append("[CQ:image,url=http://qzonestyle.gtimg.cn/qzone/em/" + m[2].str() + ".gif]");
+			int codepoint = std::stoi(m[2].str().substr(1));
+			if (codepoint > 200000)
+			{
+				u32string u32_str;
+				u32_str.append({ static_cast<char32_t>(codepoint - 200000) });
+
+				std::string utf8 = ConvertEncoding<char>(u32_str, "utf-32le", "utf-8");
+				std::stringstream stream;
+				for (char c : utf8)
+				{
+					stream << setfill('0') << hex << uppercase << setw(2) << (0xff & (unsigned int)c);
+				}
+				ret += "[emoji=";
+				ret += stream.str();
+				ret += "]";
+			}
+			else if (codepoint >= 100000)
+			{
+				ret.append("[Face" + std::to_string(codepoint - 100000) + ".gif]");
+			}
+			else
+			{
+				ret.append("[CQ:image,url=http://qzonestyle.gtimg.cn/qzone/em/" + m[2].str() + ".gif]");
+			}
 		}
 		last += m.position() + m.length();
 	}
@@ -670,9 +708,9 @@ CQAPI(const char*, OQ_Create, 0)()
 {
 	ExceptionWrapper(CQXQ_init)();
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.9\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.10\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.9}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.0.10}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
@@ -1177,7 +1215,7 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 	std::string ret;
 	int type = 0;
 	long long sourceId = 0;
-	
+
 	if (XQAPI::IfFriend(to_string(robotQQ).c_str(), accStr.c_str()))
 	{
 		type = 1;
@@ -1199,6 +1237,11 @@ CQAPI(int32_t, CQ_sendPrivateMsg, 16)(int32_t plugin_id, int64_t account, const 
 		return -1;
 	}
 	ret = parseCQCodeAndSend(type, std::to_string(sourceId).c_str(), accStr.c_str(), msg, 0, FALSE, "");
+	// 无法获取消息ID的强制成功，返回10e9
+	if (ret == "FORCESUC")
+	{
+		return 1000000000;
+	}
 	try
 	{
 		nlohmann::json j = nlohmann::json::parse(ret);
@@ -1221,6 +1264,11 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 	if (!msg) return -1;
 	std::string grpStr = std::to_string(group);
 	std::string ret = parseCQCodeAndSend(2, grpStr.c_str(), to_string(robotQQ).c_str(), msg, 0, FALSE, "");
+	// 无法获取消息ID的强制成功，返回10e9
+	if (ret == "FORCESUC")
+	{
+		return 1000000000;
+	}
 	try
 	{
 		nlohmann::json j = nlohmann::json::parse(ret);
@@ -1261,7 +1309,8 @@ CQAPI(int64_t, CQ_getLoginQQ, 4)(int32_t plugin_id)
 
 CQAPI(const char*, CQ_getLoginNick, 4)(int32_t plugin_id)
 {
-	return XQAPI::GetNick(to_string(robotQQ).c_str(), to_string(robotQQ).c_str());
+	const char* nick = XQAPI::GetNick(to_string(robotQQ).c_str(), to_string(robotQQ).c_str());
+	return nick ? delayMemFreeCStr(nickToCQCode(nick)) : "";
 }
 
 CQAPI(int32_t, CQ_setGroupAnonymous, 16)(int32_t plugin_id, int64_t group, BOOL enable)
@@ -1352,7 +1401,7 @@ CQAPI(const char*, CQ_getFriendList, 8)(int32_t plugin_id, BOOL reserved)
 			{
 				Unpack t;
 				t.add(member["uin"].get<long long>());
-				t.add(nickToCQCode(UTF8toGB18030(member["name"].get<std::string>())));
+				t.add(UTF8toGB18030(member["name"].get<std::string>()));
 				t.add("");
 				Friends.push_back(t);
 				count++;
@@ -1439,7 +1488,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		std::string groupStr = std::to_string(group);
 		const char* groupName = XQAPI::GetGroupName(to_string(robotQQ).c_str(), groupStr.c_str());
-		std::string groupNameStr = groupName ? groupName : "";
+		std::string groupNameStr = groupName ? nickToCQCode(groupName) : "";
 		int currentNum = j["mem_num"].get<int>();
 		int maxNum = j["max_num"].get<int>();
 		int friendNum = 0;
@@ -1465,7 +1514,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 		XQAPI::OutPutLog(("警告, 获取群信息失败, 正在使用更慢的另一种方法尝试: "s + memberListStr).c_str());
 		std::string groupStr = std::to_string(group);
 		const char* groupName = XQAPI::GetGroupName(to_string(robotQQ).c_str(), groupStr.c_str());
-		std::string groupNameStr = groupName ? groupName : "";
+		std::string groupNameStr = groupName ? nickToCQCode(groupName) : "";
 		const char* groupNum = XQAPI::GetGroupMemberNum(to_string(robotQQ).c_str(), groupStr.c_str());
 		int currentNum = 0, maxNum = 0;
 		if (groupNum)
@@ -1576,8 +1625,8 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		Unpack t;
 		t.add(group);
 		t.add(account);
-		t.add(j["members"][accStr].count("nk") ? nickToCQCode(UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>())) : "");
-		t.add(j["members"][accStr].count("cd") ? nickToCQCode(UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>())) : "");
+		t.add(j["members"][accStr].count("nk") ? UTF8toGB18030(j["members"][accStr]["nk"].get<std::string>()) : "");
+		t.add(j["members"][accStr].count("cd") ? UTF8toGB18030(j["members"][accStr]["cd"].get<std::string>()) : "");
 		t.add(255);
 		t.add(-1);
 		/*
@@ -1607,9 +1656,9 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		p.add(group);
 		p.add(account);
 		const char* nick = XQAPI::GetNick(to_string(robotQQ).c_str(), accStr.c_str());
-		p.add(nick ? nick : "");
+		p.add(nick ? nickToCQCode(nick) : "");
 		const char* groupCard = XQAPI::GetGroupCard(to_string(robotQQ).c_str(), grpStr.c_str(), accStr.c_str());
-		p.add(groupCard ? groupCard : "");
+		p.add(groupCard ? nickToCQCode(groupCard) : "");
 		p.add(255);
 		p.add(-1);
 		/*
@@ -1679,8 +1728,8 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 			Unpack t;
 			t.add(group);
 			t.add(qq);
-			t.add(member.value().count("nk") ? nickToCQCode(UTF8toGB18030(member.value()["nk"].get<std::string>())) : "");
-			t.add(member.value().count("cd") ? nickToCQCode(UTF8toGB18030(member.value()["cd"].get<std::string>())) : "");
+			t.add(member.value().count("nk") ? UTF8toGB18030(member.value()["nk"].get<std::string>()) : "");
+			t.add(member.value().count("cd") ? UTF8toGB18030(member.value()["cd"].get<std::string>()) : "");
 			t.add(255);
 			t.add(-1);
 			/*
@@ -1777,7 +1826,8 @@ CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, B
 	std::string accStr = std::to_string(account);
 	Unpack p;
 	p.add(account);
-	p.add(nickToCQCode(XQAPI::GetNick(to_string(robotQQ).c_str(), accStr.c_str())));
+	const char* nick = XQAPI::GetNick(to_string(robotQQ).c_str(), accStr.c_str());
+	p.add(nick ? nickToCQCode(nick) : "");
 	p.add(255);
 	p.add(-1);
 	/*
@@ -1795,6 +1845,11 @@ CQAPI(int32_t, CQ_sendDiscussMsg, 16)(int32_t plugin_id, int64_t discuss, const 
 	if (!msg) return -1;
 	std::string discussStr = std::to_string(discuss);
 	std::string ret = parseCQCodeAndSend(3, discussStr.c_str(), to_string(robotQQ).c_str(), msg, 0, FALSE, "");
+	// 无法获取消息ID的强制成功，返回10e9
+	if (ret == "FORCESUC")
+	{
+		return 1000000000;
+	}
 	try
 	{
 		nlohmann::json j = nlohmann::json::parse(ret);

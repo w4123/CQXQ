@@ -124,6 +124,8 @@ void initFuncs(const HMODULE& hModule);
 
 	XQAPI(SendXML, void, const char* botQQ, int32_t sendType, int32_t msgType, const char* groupId, const char* QQ, const char* objectMsg, int32_t subType)
 
+	XQAPI(ShakeWindow, BOOL, const char* botQQ, const char* QQ)
+
 	//XQAPI(GetAge, int32_t, const char* botQQ, const char* QQ)
 
 	//XQAPI(GetGender, int32_t, const char* botQQ, const char* QQ)
