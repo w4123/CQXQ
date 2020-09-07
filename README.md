@@ -75,8 +75,8 @@ CQ码
 - [ ] sign(受先驱限制无法支持)
 - [ ] rich
 - [ ] music
-- [ ] rps
-- [ ] dice
+- [ ] rps(受先驱限制无法支持)
+- [ ] dice(受先驱限制无法支持)
 - [x] anonymous
 - [x] shake
 - [ ] sface(受先驱限制无法支持)
