@@ -201,6 +201,10 @@ XQAPI(int32_t, CQ_sendLike, 12, int32_t plugin_id, int64_t account)
 	return _CQ_sendLike(plugin_id, account);
 }
 
+XQAPI(int32_t, isCQXQ, 0)
+{
+	return 1;
+}
 
 HMODULE XQHModule = nullptr;
 
@@ -211,8 +215,8 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	switch(ul_reason_for_call)
 	{
 	case DLL_PROCESS_ATTACH:
-		XQHModule = LoadLibraryA("CQXQ.XQ.dll");
-		if (!XQHModule) XQHModule = LoadLibraryA("CQOQ.OQ.dll");
+		XQHModule = GetModuleHandleA("CQXQ.XQ.dll");
+		if (!XQHModule) XQHModule = GetModuleHandleA("CQOQ.OQ.dll");
 		if (!XQHModule) throw std::runtime_error("Unable to load compatibility layer");
 		_CQ_canSendImage = (CQ_canSendImage_TYPE)GetProcAddress(XQHModule, "CQ_canSendImage");
 		_CQ_canSendRecord = (CQ_canSendRecord_TYPE)GetProcAddress(XQHModule, "CQ_canSendRecord");
@@ -251,9 +255,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		_CQ_getCookies = (CQ_getCookies_TYPE)GetProcAddress(XQHModule, "CQ_getCookies");
 		_CQ_setGroupAddRequest = (CQ_setGroupAddRequest_TYPE)GetProcAddress(XQHModule, "CQ_setGroupAddRequest");
 		_CQ_sendLike = (CQ_sendLike_TYPE)GetProcAddress(XQHModule, "CQ_sendLike");
-		break;
-	case DLL_PROCESS_DETACH:
-		FreeLibrary(XQHModule);
 		break;
 	default:
 		break;
