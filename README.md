@@ -71,13 +71,13 @@ CQ码
 - [x] share(单向发送)
 - [ ] contact
 - [ ] location
-- [ ] show
+- [ ] show(受先驱限制无法支持)
 - [ ] sign(受先驱限制无法支持)
 - [ ] rich
 - [ ] music
 - [ ] rps
 - [ ] dice
-- [ ] anonymous
+- [x] anonymous
 - [x] shake
 - [ ] sface(受先驱限制无法支持)
 - [ ] bface(受先驱限制无法支持)
