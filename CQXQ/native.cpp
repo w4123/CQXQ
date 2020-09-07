@@ -25,6 +25,8 @@
 #include <CommCtrl.h>
 #include <DbgHelp.h>
 
+#pragma comment(lib, "urlmon.lib")
+
 // 包含一次实现
 #define XQAPI_IMPLEMENTATION
 #include "XQAPI.h"
@@ -348,8 +350,8 @@ std::string parseCQCodeAndSend(int32_t msgType, const char* targetId, const char
 				// 已有图片
 				if (fileStr[0] == '{')
 				{
-					regex groupPic("\\{([0-9A-Fa-f]{8})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{12})\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
-					regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-]([0-9A-Fa-f]{32})\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
+					regex groupPic("\\{([0-9A-Fa-f]{8})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{12})\\}\\.(jpg|png|gif|bmp|jpeg).*", regex::ECMAScript | regex::icase);
+					regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-]([0-9A-Fa-f]{32})\\}\\.(jpg|png|gif|bmp|jpeg).*", regex::ECMAScript | regex::icase);
 					smatch m;
 					// 转换群聊和好友图片
 					if ((msgType == 1 || msgType == 4 || msgType == 5) && regex_match(fileStr, m, groupPic))
@@ -572,7 +574,6 @@ std::string nickToCQCode(const std::string& msg)
 		last += m.position() + m.length();
 	}
 	ret.append(msg.substr(last));
-	XQAPI::OutPutLog(("NICK CONVERT: "s + msg + " -> "s + ret).c_str());
 	return ret;
 }
 
@@ -678,6 +679,10 @@ void __stdcall CQXQ_init()
 
 	// 加载CQP.dll
 	CQPHModule = LoadLibraryA("CQP.dll");
+
+	// 创建必要文件夹
+	std::filesystem::create_directories(rootPath + "\\data\\image\\");
+	std::filesystem::create_directories(rootPath + "\\data\\record\\");
 
 	// 加载CQ插件
 	std::string ppath = rootPath + "\\CQPlugins\\";
@@ -1852,21 +1857,39 @@ CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* file)
 		fileStr = fileStr.substr(5, fileStr.length() - 5 - 1);
 	}
 
+	const char* picLink;
+	std::string picFileName;
 	// 现在是图片名本身，判断是否符合格式, 并判断是好友图片还是群聊图片
-	regex groupPic("\\{[0-9A-Fa-f]{8}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{4}[-][0-9A-Fa-f]{12}\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
-	regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-][0-9A-Fa-f]{32}\\}\\.(jpg|png|gif|bmp|jpeg)", regex::ECMAScript | regex::icase);
-	if (regex_match(fileStr, groupPic))
+	regex groupPic("\\{([0-9A-Fa-f]{8})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{4})[-]([0-9A-Fa-f]{12})\\}\\.(jpg|png|gif|bmp|jpeg).*", regex::ECMAScript | regex::icase);
+	regex privatePic("\\{[0-9]{5,15}[-][0-9]{5,15}[-]([0-9A-Fa-f]{32})\\}\\.(jpg|png|gif|bmp|jpeg).*", regex::ECMAScript | regex::icase);
+	smatch m;
+	if (regex_match(fileStr, m, groupPic))
 	{
 		fileStr = "[pic=" + fileStr + "]";
+		picFileName = m[1].str() + m[2].str() + m[3].str() + m[4].str() + m[5].str() + "." + m[6].str();
 		// 群号其实并没有用，随便写一个
-		return XQAPI::GetPicLink(to_string(robotQQ).c_str(), 2, "173528463", fileStr.c_str());
+		picLink = XQAPI::GetPicLink(to_string(robotQQ).c_str(), 2, "173528463", fileStr.c_str());
 	}
-	else if (regex_match(fileStr, privatePic))
+	else if (regex_match(fileStr, m, privatePic))
 	{
 		fileStr = "[pic=" + fileStr + "]";
-		return XQAPI::GetPicLink(to_string(robotQQ).c_str(), 1, "", fileStr.c_str());
+		picFileName = m[1].str() + "." + m[2].str();
+		picLink = XQAPI::GetPicLink(to_string(robotQQ).c_str(), 1, "", fileStr.c_str());
+	}
+	else
+	{
+		return "";
 	}
 
+	if (!picLink || strcmp(picLink, "") == 0)
+	{
+		return "";
+	}
+	std::string path = rootPath + "\\data\\image\\" + picFileName;
+	if (filesystem::exists(path) || URLDownloadToFileA(nullptr, picLink, (path).c_str(), 0, nullptr) == S_OK)
+	{
+		return delayMemFreeCStr(path);
+	}
 	return "";
 }
 
@@ -1874,12 +1897,33 @@ CQAPI(const char*, CQ_getRecordV2, 12)(int32_t plugin_id, const char* file, cons
 {
 	if (!file) return "";
 	std::string fileStr(file);
+	std::string recordName;
 	if (fileStr.empty()) return "";
 	if (fileStr.substr(0, 16) == "[CQ:record,file=")
 	{
 		fileStr = "[Voi=" + fileStr.substr(16, fileStr.length() - 1 - 16) + "]";
+		recordName = fileStr.substr(16, fileStr.length() - 1 - 16);
 	}
-	return XQAPI::GetVoiLink(to_string(robotQQ).c_str(), fileStr.c_str());
+	else if (fileStr.substr(0, 5) == "[Voi=")
+	{
+		recordName = fileStr.substr(5, fileStr.length() - 1 - 5);
+	}
+	else
+	{
+		return "";
+	}
+
+	const char* recordLink = XQAPI::GetVoiLink(to_string(robotQQ).c_str(), fileStr.c_str());
+	if (!recordLink || strcmp(recordLink, "") == 0)
+	{
+		return "";
+	}
+	std::string path = rootPath + "\\data\\record\\" + recordName;
+	if (filesystem::exists(path) || URLDownloadToFileA(nullptr, recordLink, path.c_str(), 0, nullptr) == S_OK)
+	{
+		return delayMemFreeCStr(path);
+	}
+	return "";
 }
 
 CQAPI(const char*, CQ_getStrangerInfo, 16)(int32_t plugin_id, int64_t account, BOOL disableCache)
