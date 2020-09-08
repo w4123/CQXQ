@@ -30,8 +30,8 @@ typedef int32_t (__stdcall* EvFriendAdd)(int32_t, int32_t, int64_t);
 #define XQ_DiscussMsgEvent 3
 #define XQ_GroupTmpMsgEvent 4
 #define XQ_DiscussTmpMsgEvent 5
-
 #define XQ_GroupSelfMsgEvent 10
+#define XQ_ShakeEvent 109
 
 #define XQ_FriendAddReqEvent 101
 #define XQ_FriendAddedEvent 100

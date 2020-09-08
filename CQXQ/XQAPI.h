@@ -25,6 +25,7 @@ namespace XQAPI
 			for (const auto& initializer : apiFuncInitializers) {
 				initializer(hModule);
 			}
+			apiFuncInitializers.clear();
 		}
 		__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
 		{

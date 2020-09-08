@@ -610,10 +610,6 @@ void __stdcall MsgLoop()
 
 void __stdcall CQXQ_init()
 {
-	// 调试用-加载符号
-	SymInitialize(GetCurrentProcess(), NULL, TRUE);
-	SymSetOptions(SYMOPT_LOAD_LINES);
-
 	// 获取文件目录
 	char path[MAX_PATH];
 	GetModuleFileNameA(nullptr, path, MAX_PATH);
@@ -738,12 +734,14 @@ void __stdcall CQXQ_init()
 		}
 	});
 
+	
 	fakeMainThread.push([](int)
 	{
 		ExceptionWrapper(InitGUI)();
 	}).wait();
 	 
 	fakeMainThread.push([](int) { ExceptionWrapper(MsgLoop)(); });
+	
 }
 
 
@@ -792,7 +790,6 @@ void __stdcall CQXQ_Uninit()
 	}).wait();
 	fakeMainThread.stop();
 	p.stop();
-	SymCleanup(GetCurrentProcess());
 }
 
 #ifdef XQ
@@ -1157,7 +1154,7 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 		return 0;
 	}
 
-	if (msgType == XQ_FriendMsgEvent)
+	if (msgType == XQ_FriendMsgEvent || msgType == XQ_ShakeEvent)
 	{
 		size_t id = newMsgId({ 1, -1, atoll(activeQQ), atoll(msgNum), atoll(msgId), atoll(timeStamp) });
 		for (const auto& plugin : plugins_events[CQ_eventPrivateMsg])
@@ -1166,7 +1163,7 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 			const auto privMsg = EvPriMsg(plugin.event);
 			if (privMsg)
 			{
-				if (privMsg(11, id, atoll(activeQQ), parseToCQCode(msg).c_str(), 0)) break;
+				if (privMsg(11, id, atoll(activeQQ), (msgType == XQ_FriendMsgEvent) ? parseToCQCode(msg).c_str() : "[CQ:shake]", 0)) break;
 			}
 		}
 		return 0;

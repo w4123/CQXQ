@@ -137,8 +137,6 @@ std::string formatStack(CONTEXT* ctx) //Prints stack trace based on context reco
 	stack.AddrFrame.Offset = (*ctx).Ebp;
 	stack.AddrFrame.Mode = AddrModeFlat;
 #endif
-	
-	SymRefreshModuleList(process);
 
 	for (frame = 0; ; frame++)
 	{
@@ -218,6 +216,11 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 )
 {
 	std::unique_lock lock(HandlerMutex);
+
+	// µ˜ ‘”√-º”‘ÿ∑˚∫≈
+	SymInitialize(GetCurrentProcess(), NULL, TRUE);
+	SymSetOptions(SYMOPT_LOAD_LINES);
+
 	INITCOMMONCONTROLSEX ex;
 	ex.dwICC = ICC_STANDARD_CLASSES;
 	ex.dwSize = sizeof(ex);
@@ -275,7 +278,9 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 
 	if (pnButton == EXIT_BUTTON)
 	{
-		exit(-1);
+		SymCleanup(GetCurrentProcess());
+		exit(EXIT_FAILURE);
 	}
+	SymCleanup(GetCurrentProcess());
 	return EXCEPTION_EXECUTE_HANDLER;
 }
