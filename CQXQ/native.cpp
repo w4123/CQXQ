@@ -85,17 +85,19 @@ const char* delayMemFreeCStr(const std::string& str)
 	return s;
 }
 
-FakeMsgId* delayMemFreeMsgId(const FakeMsgId& MsgId)
+class Cominit
 {
-	FakeMsgId* m = (FakeMsgId*)malloc(sizeof(FakeMsgId));
-	memcpy_s(m, sizeof(FakeMsgId), &MsgId, sizeof(FakeMsgId));
+public:
+	HRESULT hr;
+	Cominit()
 	{
-		std::unique_lock lock(memFreeMutex);
-		memFreeQueue.push({ time(nullptr), (void*)m });
+		hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 	}
-	return m;
-}
-
+	~Cominit()
+	{
+		if (SUCCEEDED(hr)) CoUninitialize();
+	}
+};
 
 template <typename T, typename... Args>
 function<T(Args...)> __stdcall ExceptionWrapper(T(__stdcall* func)(Args...))
@@ -1886,6 +1888,7 @@ CQAPI(const char*, CQ_getImage, 8)(int32_t plugin_id, const char* file)
 		return "";
 	}
 	std::string path = rootPath + "\\data\\image\\" + picFileName;
+	Cominit init;
 	if (filesystem::exists(path) || URLDownloadToFileA(nullptr, picLink, (path).c_str(), 0, nullptr) == S_OK)
 	{
 		return delayMemFreeCStr(path);
@@ -1919,10 +1922,12 @@ CQAPI(const char*, CQ_getRecordV2, 12)(int32_t plugin_id, const char* file, cons
 		return "";
 	}
 	std::string path = rootPath + "\\data\\record\\" + recordName;
+	Cominit init;
 	if (filesystem::exists(path) || URLDownloadToFileA(nullptr, recordLink, path.c_str(), 0, nullptr) == S_OK)
 	{
 		return delayMemFreeCStr(path);
 	}
+	
 	return "";
 }
 
