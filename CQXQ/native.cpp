@@ -620,7 +620,7 @@ void __stdcall CQXQ_init()
 
 	// 初始化伪主线程
 	fakeMainThread.push([](int) { 
-		OleInitialize(nullptr);
+		HRESULT hr = OleInitialize(nullptr);
 		INITCOMMONCONTROLSEX ex;
 		ex.dwSize = sizeof(ex);
 		ex.dwICC = ICC_ANIMATE_CLASS | ICC_BAR_CLASSES | ICC_COOL_CLASSES | ICC_DATE_CLASSES | ICC_HOTKEY_CLASS | ICC_INTERNET_CLASSES |
@@ -826,7 +826,17 @@ std::pair<std::string, time_t> GroupListCache;
 
 int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, const char* sourceId, const char* activeQQ, const char* passiveQQ, const char* msg, const char* msgNum, const char* msgId, const char* rawMsg, const char* timeStamp, char* retText)
 {
-	std::string botQQStr = botQQ ? botQQ : "";
+	botQQ = botQQ ? botQQ : "";
+	sourceId = sourceId ? sourceId : "";
+	activeQQ = activeQQ ? activeQQ : "";
+	passiveQQ = passiveQQ ? passiveQQ : "";
+	msg = msg ? msg : "";
+	msgNum = msgNum ? msgNum : "";
+	msgId = msgId ? msgId : "";
+	rawMsg = rawMsg ? rawMsg : "";
+	timeStamp = timeStamp ? timeStamp : "";
+
+	std::string botQQStr = botQQ;
 
 	if (robotQQ == 0) robotQQ = atoll(botQQ);
 	if (!botQQStr.empty() && robotQQ != atoll(botQQ)) return 0;
@@ -914,55 +924,59 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 	}
 	if (msgType == XQ_GroupInviteReqEvent)
 	{
+		Unpack p;
+		p.add(XQ_GroupInviteReqEvent);
+		p.add(sourceId);
+		p.add(activeQQ);
+		p.add(rawMsg);
+		const std::string data = base64_encode(p.getAll());
 		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
 			const auto invited = EvRequestAddGroup(plugin.event);
 			if (invited)
 			{
-				Unpack p;
-				p.add(XQ_GroupInviteReqEvent);
-				p.add(sourceId);
-				p.add(activeQQ);
-				p.add(rawMsg);
-				if (invited(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+
+				if (invited(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, data.c_str())) break;
 			}
 		}
 		return 0;
 	}
 	if (msgType == XQ_GroupAddReqEvent)
 	{
+		Unpack p;
+		p.add(XQ_GroupAddReqEvent);
+		p.add(sourceId);
+		p.add(activeQQ);
+		p.add(rawMsg);
+		const std::string data = base64_encode(p.getAll());
 		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
 			const auto addReq = EvRequestAddGroup(plugin.event);
 			if (addReq)
 			{
-				Unpack p;
-				p.add(XQ_GroupAddReqEvent);
-				p.add(sourceId);
-				p.add(activeQQ);
-				p.add(rawMsg);
-				if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, base64_encode(p.getAll()).c_str())) break;
+				if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, data.c_str())) break;
 			}
 		}
 		return 0;
 	}
 	if (msgType == XQ_GroupInviteOtherReqEvent)
 	{
+		Unpack p;
+		p.add(XQ_GroupInviteOtherReqEvent);
+		p.add(sourceId);
+		p.add(activeQQ);
+		p.add(rawMsg);
+		const std::string data = base64_encode(p.getAll());
+		const string CQInviteMsg = "邀请人：[CQ:at,qq="s + activeQQ + "]" + ((strcmp(msg, "") != 0) ? (" 附言："s + msg) : "");
 		for (const auto& plugin : plugins_events[CQ_eventRequest_AddGroup])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
 			const auto addReq = EvRequestAddGroup(plugin.event);
 			if (addReq)
 			{
-				Unpack p;
-				p.add(XQ_GroupInviteOtherReqEvent);
-				p.add(sourceId);
-				p.add(activeQQ);
-				p.add(rawMsg);
-				const string CQInviteMsg = "邀请人：[CQ:at,qq="s + activeQQ + "]" + (msg ? (" 附言："s + msg) : "");
-				if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ), CQInviteMsg.c_str(), base64_encode(p.getAll()).c_str())) break;
+				if (addReq(1, atoi(timeStamp), atoll(sourceId), atoll(passiveQQ), CQInviteMsg.c_str(), data.c_str())) break;
 			}
 		}
 		return 0;
@@ -983,7 +997,7 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 	if (msgType == XQ_GroupBanEvent)
 	{
 		int banTime = 0;
-		std::string banTimeStr = msg ? msg : "";
+		std::string banTimeStr = msg;
 		regex banTimeRegex("([0-9]+)天([0-9]+)时([0-9]+)分([0-9]+)秒", regex::ECMAScript);
 		smatch m;
 		if (regex_search(banTimeStr, m, banTimeRegex))
@@ -1105,6 +1119,7 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 	}
 	if (msgType == XQ_GroupAdminSet)
 	{
+		GroupMemberCache.erase(atoll(sourceId));
 		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1118,6 +1133,7 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 	}
 	if (msgType == XQ_GroupAdminUnset)
 	{
+		GroupMemberCache.erase(atoll(sourceId));
 		for (const auto& plugin : plugins_events[CQ_eventSystem_GroupAdmin])
 		{
 			if (!plugins[plugin.plugin_id].enabled) continue;
@@ -1139,6 +1155,66 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 			if (event)
 			{
 				if (event(1, atoi(timeStamp), atoll(activeQQ))) break;
+			}
+		}
+		return 0;
+	}
+
+	if (msgType == XQ_GroupFileUploadEvent)
+	{
+		std::string msgStr = msg;
+		std::string sections = msgStr.substr(1, msgStr.size() - 2);
+
+		// 转换为ID
+		std::string id = retrieveSectionData(sections, "File");
+		id = "/" + id.substr(1, id.size() - 2);
+
+		// 文件名称
+		std::string rawName = retrieveSectionData(sections, "name");
+		std::string name;
+		for (size_t i = 0; i < rawName.length(); i += 2)
+		{
+			string byte = rawName.substr(i, 2);
+			name.push_back(static_cast<char> (strtol(byte.c_str(), nullptr, 16)));
+		}
+		name = UTF8toGB18030(name);
+
+		// 文件大小
+		long long size = 0;
+		std::string rawMsgStr = rawMsg;
+		int ByteLoc = rawMsgStr.find("42 79 74 65");
+		if (ByteLoc != string::npos)
+		{
+			long long place = 1;
+			while (ByteLoc >= 0)
+			{
+				ByteLoc -= 3;
+				char c = static_cast<char>(strtol(rawMsgStr.substr(ByteLoc, 2).c_str(), nullptr, 16));
+				if (isdigit(static_cast<unsigned char>(c)))
+				{
+					size += place * (c - 48LL);
+				}
+				else
+				{
+					break;
+				}
+				place *= 10;
+			}
+		}
+		Unpack p;
+		p.add(id);
+		p.add(name);
+		p.add(size);
+		p.add(0LL);
+
+		const std::string file = base64_encode(p.getAll());
+		for (const auto& plugin : plugins_events[CQ_eventGroupUpload])
+		{
+			if (!plugins[plugin.plugin_id].enabled) continue;
+			const auto event = EvGroupUpload(plugin.event);
+			if (event)
+			{
+				if (event(1, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), file.c_str())) break;
 			}
 		}
 		return 0;
