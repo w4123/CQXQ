@@ -8,6 +8,7 @@
 #include <iomanip>
 #include "EncodingConvert.h"
 #include <ehdata.h>
+#include <mutex>
 using namespace std;
 
 // ¥ÌŒÛ¥¶¿Ì
@@ -210,10 +211,13 @@ std::string formatStack(CONTEXT* ctx) //Prints stack trace based on context reco
 	return ret.str();
 }
 
+std::mutex HandlerMutex;
+
 LONG WINAPI CQXQUnhandledExceptionFilter(
 	LPEXCEPTION_POINTERS ExceptionInfo
 )
 {
+	std::unique_lock lock(HandlerMutex);
 	INITCOMMONCONTROLSEX ex;
 	ex.dwICC = ICC_STANDARD_CLASSES;
 	ex.dwSize = sizeof(ex);
