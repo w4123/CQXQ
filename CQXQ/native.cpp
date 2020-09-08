@@ -588,8 +588,6 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 	case DLL_PROCESS_ATTACH:
 		hDllModule = hModule;
 		break;
-	case DLL_PROCESS_DETACH:
-		OutputDebugStringA("Detaching");
 	}
 	
 	return TRUE;
