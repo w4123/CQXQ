@@ -1,7 +1,8 @@
 #pragma once
 int __stdcall InitGUI();
-void __stdcall ShowMainWindowAsync();
+void __stdcall ShowMainWindow();
 void __stdcall DestroyMainWindow();
+void __stdcall UpdateMainWindow();
 
 // GUI
 class GUI;

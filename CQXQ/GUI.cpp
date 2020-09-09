@@ -13,6 +13,7 @@
 #include <fstream>
 #include <thread>
 
+#include "CQPluginLoader.h"
 #include "GlobalVar.h"
 #include "native.h"
 #include <filesystem>
@@ -29,6 +30,9 @@ using namespace std;
 #define ID_MASTER_STATICDESC 1004
 #define ID_MASTER_LVPLUGIN 1005
 #define ID_MASTER_BUTTONRECVSELFMSG 1006
+#define ID_MASTER_BUTTONRELOADALL 1007
+#define ID_MASTER_BUTTONGITHUB 1008
+#define ID_MASTER_BUTTONADDGROUP 1009
 
 template <typename T>
 class BaseWindow
@@ -426,9 +430,13 @@ public:
 	BasicButton ButtonReload;
 	BasicButton ButtonMenu;
 	BasicButton ButtonSwitchRecvSelfMsg;
+	BasicButton ButtonReloadAll;
+	BasicButton ButtonGitHub;
+	BasicButton ButtonAddGroup;
 
 	std::map<std::string, HFONT> Fonts;
 	LRESULT CreateMainPage();
+	LRESULT UpdateGUI();
 
 	[[nodiscard]] PCSTR ClassName() const override { return "GUI"; }
 	LRESULT HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam) override;
@@ -588,7 +596,17 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		return 0;
 		case ID_MASTER_BUTTONRELOAD:
 		{
-			MessageBoxA(m_hwnd, "暂未实现，敬请期待", "CQXQ", MB_OK);
+			if (SelectedIndex == -1)
+			{
+				MessageBoxA(m_hwnd, "请先单击左侧列表选择一个插件!", "CQXQ", MB_OK);
+				return 0;
+			}
+			if (!EnabledEventCalled)
+			{
+				MessageBoxA(m_hwnd, "插件尚未初始化完毕，等待QQ登陆完成后插件进行初始化！", "CQXQ", MB_OK);
+				return 0;
+			}
+			reloadOneCQPlugin(SelectedIndex);
 		}
 		return 0;
 		case ID_MASTER_BUTTONRECVSELFMSG:
@@ -613,6 +631,26 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 					std::filesystem::remove(p);
 				}
 			}
+		}
+		return 0;
+		case ID_MASTER_BUTTONADDGROUP:
+		{
+			ShellExecuteA(nullptr, "open", "https://jq.qq.com/?_wv=1027&k=GoSXrbRc", nullptr, nullptr, SW_SHOWNORMAL);
+		}
+		return 0;
+		case ID_MASTER_BUTTONGITHUB:
+		{
+			ShellExecuteA(nullptr, "open", "https://github.com/w4123/CQXQ", nullptr, nullptr, SW_SHOWNORMAL);
+		}
+		return 0;
+		case ID_MASTER_BUTTONRELOADALL:
+		{
+			if (!EnabledEventCalled)
+			{
+				MessageBoxA(m_hwnd, "插件尚未初始化完毕，等待QQ登陆完成后插件进行初始化！", "CQXQ", MB_OK);
+				return 0;
+			}
+			reloadAllCQPlugin();
 		}
 		return 0;
 		default:
@@ -668,6 +706,12 @@ LRESULT GUI::CreateMainPage()
 		600, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONMENU));
 	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "停止接收来自自己的事件" : "开始接收来自自己的事件", WS_CHILD | WS_VISIBLE, 0,
 		400, 320, 270, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRECVSELFMSG));
+	ButtonReloadAll.Create("全部重载", WS_CHILD | WS_VISIBLE, 0,
+		12, 430, 90, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRELOADALL));
+	ButtonGitHub.Create("查看源码", WS_CHILD | WS_VISIBLE, 0,
+		144, 430, 90, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONGITHUB));
+	ButtonAddGroup.Create("加开发群", WS_CHILD | WS_VISIBLE, 0,
+		277, 430, 90, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONADDGROUP));
 
 	StaticDesc.Create("单击左侧列表选择一个插件",
 		WS_CHILD | WS_VISIBLE, 0,
@@ -677,7 +721,7 @@ LRESULT GUI::CreateMainPage()
 		WS_CHILD | LVS_REPORT | WS_VISIBLE | WS_BORDER | LVS_SINGLESEL,
 		0,
 		12, 12,
-		355, 426,
+		355, 410,
 		m_hwnd,
 		reinterpret_cast<HMENU>(ID_MASTER_LVPLUGIN));
 	ListViewPlugin.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT);
@@ -686,7 +730,7 @@ LRESULT GUI::CreateMainPage()
 	int index = 0;
 	for (const auto& item : plugins)
 	{
-		ListViewPlugin.AddTextRow({ std::to_string(item.id), item.name, item.author, item.version }, index);
+		ListViewPlugin.AddTextRow({ std::to_string(item.second.id), item.second.name, item.second.author, item.second.version }, index);
 		index++;
 	}
 
@@ -696,6 +740,9 @@ LRESULT GUI::CreateMainPage()
 	ButtonMenu.SetFont(Yahei18);
 	StaticDesc.SetFont(Yahei18);
 	ButtonSwitchRecvSelfMsg.SetFont(Yahei18);
+	ButtonReloadAll.SetFont(Yahei18);
+	ButtonGitHub.SetFont(Yahei18);
+	ButtonAddGroup.SetFont(Yahei18);
 	return 0;
 }
 
@@ -723,7 +770,22 @@ int __stdcall InitGUI()
 	return 0;
 }
 
-void __stdcall ShowMainWindowAsync()
+LRESULT GUI::UpdateGUI()
+{
+	ListViewPlugin.DeleteAllItems();
+	int index = 0;
+	for (const auto& item : plugins)
+	{
+		ListViewPlugin.AddTextRow({ std::to_string(item.second.id), item.second.name, item.second.author, item.second.version }, index);
+		index++;
+	}
+	StaticDesc.SetText("单击左侧列表选择一个插件");
+	SelectedIndex = -1;
+	ButtonEnable.SetText("启用");
+	return 0;
+}
+
+void __stdcall ShowMainWindow()
 {
 	ShowWindowAsync(MainWindow.Window(), SW_SHOW);
 	SetForegroundWindow(MainWindow.Window());
@@ -732,4 +794,16 @@ void __stdcall ShowMainWindowAsync()
 void __stdcall DestroyMainWindow()
 {
 	DestroyWindow(MainWindow.Window());
+}
+
+void __stdcall UpdateMainWindow()
+{
+	if (this_thread::get_id() == fakeMainThread.get_thread(0).get_id())
+	{
+		MainWindow.UpdateGUI();
+	}
+	else
+	{
+		fakeMainThread.push([](int) { MainWindow.UpdateGUI(); }).wait();
+	}	
 }

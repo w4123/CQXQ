@@ -7,8 +7,8 @@
 #include <CommCtrl.h>
 #include <iomanip>
 #include "EncodingConvert.h"
-#include <ehdata.h>
 #include <mutex>
+#include "CQPluginLoader.h"
 using namespace std;
 
 // 错误处理
@@ -253,7 +253,7 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	buttons[1].nButtonID = RELOAD_BUTTON;
 	buttons[1].pszButtonText = L"重载\nCQXQ将重载所有插件";
 	buttons[2].nButtonID = RELOAD_EXCEPT_ERROR_BUTTON;
-	buttons[2].pszButtonText = L"重载(不重载出错应用)\nCQXQ将重载所有插件, 但将禁用出错应用";
+	buttons[2].pszButtonText = L"重载(禁用出错应用)\nCQXQ将重载所有插件, 但将禁用出错应用(别点这个还没写完)";
 	buttons[3].nButtonID = EXIT_BUTTON;
 	buttons[3].pszButtonText = L"退出\n程序将会退出";
 
@@ -280,6 +280,10 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	{
 		SymCleanup(GetCurrentProcess());
 		exit(EXIT_FAILURE);
+	}
+	else if (pnButton == RELOAD_BUTTON)
+	{
+		reloadAllCQPlugin();
 	}
 	SymCleanup(GetCurrentProcess());
 	return EXCEPTION_EXECUTE_HANDLER;

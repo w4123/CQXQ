@@ -22,6 +22,7 @@
 #include <regex>
 #include "RichMessage.h"
 #include "ErrorHandler.h"
+#include "CQPluginLoader.h"
 #include <CommCtrl.h>
 #include <DbgHelp.h>
 
@@ -72,7 +73,8 @@ size_t newMsgId(const FakeMsgId& msgId)
 // 总内存释放线程
 std::unique_ptr<std::thread> memFreeThread;
 
-
+// 是否已经初始化完毕
+std::atomic<bool> Init = false;
 
 // 复制字符串, 返回复制后的字符串指针，字符串内存5分钟后释放
 const char* delayMemFreeCStr(const std::string& str)
@@ -99,150 +101,8 @@ public:
 	}
 };
 
-template <typename T, typename... Args>
-function<T(Args...)> __stdcall ExceptionWrapper(T(__stdcall* func)(Args...))
-{
-	return function<T(Args...)>([func](Args&&... args) -> T
-	{
-		__try
-		{
-			return func(std::forward<Args>(args)...);
-		}
-		__except (CQXQUnhandledExceptionFilter(GetExceptionInformation()))
-		{
-			;
-		}
-		return T();
-	});
-}
-
 HMODULE XQHModule = nullptr;
 HMODULE CQPHModule = nullptr;
-
-int loadCQPlugin(const std::filesystem::path& file)
-{
-	std::string ppath = rootPath + "\\CQPlugins\\";
-	native_plugin plugin = { static_cast<int>(plugins.size()), file.filename().string() };
-	const auto dll = LoadLibraryA(file.string().c_str());
-	if (!dll)
-	{
-		int err = GetLastError();
-		XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！LoadLibrary错误代码：" + std::to_string(err)).c_str());
-		FreeLibrary(dll);
-		return err;
-	}
-	// 读取Json
-	auto fileCopy = file;
-	fileCopy.replace_extension(".json");
-	ifstream jsonstream(fileCopy);
-	FARPROC init = nullptr;
-	if (jsonstream)
-	{
-		try
-		{
-			stringstream jStrStream;
-			jStrStream << jsonstream.rdbuf();
-			std::string jsonStr = jStrStream.str();
-			nlohmann::json j;
-			try
-			{
-				j = nlohmann::json::parse(jsonStr, nullptr, true, true);
-			}
-			catch (std::exception&)
-			{
-				j = nlohmann::json::parse(GB18030toUTF8(jsonStr), nullptr, true, true);
-			}
-			
-			plugin.name = UTF8toGB18030(j["name"].get<std::string>());
-			plugin.version = UTF8toGB18030(j["version"].get<std::string>());
-			j["version_id"].get_to(plugin.version_id);
-			plugin.author = UTF8toGB18030(j["author"].get<std::string>());
-			plugin.description = UTF8toGB18030(j["description"].get<std::string>());
-			for(const auto& it : j["event"])
-			{
-				int type = it["type"].get<int>();
-				int priority = it.count("priority")? it["priority"].get<int>() : 30000;
-				FARPROC procAddress = nullptr;
-				if (it.count("function"))
-				{
-					procAddress = GetProcAddress(dll, UTF8toGB18030(it["function"].get<std::string>()).c_str());
-				}
-				else if (it.count("offset"))
-				{
-					procAddress = FARPROC((BYTE*)dll + it["offset"].get<int>());
-				}
-				 
-				if (procAddress)
-				{
-					auto e = eventType{ plugin.id, priority, procAddress };
-					plugin.events[type] = e;
-					plugins_events[type].push_back(e);
-				}
-				else
-				{
-					XQAPI::OutPutLog(("加载" + file.filename().string() + "的事件类型" + std::to_string(type) + "时失败! 请检查json文件是否正确!").c_str());
-				}
-			}
-			for(const auto& it:j["menu"])
-			{
-				FARPROC procAddress = nullptr;
-				if (it.count("function"))
-				{
-					procAddress = GetProcAddress(dll, UTF8toGB18030(it["function"].get<std::string>()).c_str());
-				}
-				else if (it.count("offset"))
-				{
-					procAddress = FARPROC((BYTE*)dll + it["offset"].get<int>());
-				}
-				if (procAddress)
-				{
-					plugin.menus.push_back({ UTF8toGB18030(it["name"].get<std::string>()), procAddress });
-				}
-				else
-				{
-					XQAPI::OutPutLog(("加载" + file.filename().string() + "的菜单" + UTF8toGB18030(it["name"].get<std::string>()) + "时失败! 请检查json文件是否正确!").c_str());
-				}
-				
-			}
-			if(j.count("init_offset")) init = FARPROC((BYTE*)dll + j["init_offset"].get<int>());
-		}
-		catch(std::exception& e)
-		{
-			XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！Json文件读取失败! " + e.what()).c_str());
-			FreeLibrary(dll);
-			return 0;
-		}
-	}
-	else
-	{
-		XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！无法打开Json文件!").c_str());
-		FreeLibrary(dll);
-		return 0;
-	}
-	const auto initFunc = FuncInitialize(init ? init : GetProcAddress(dll, "Initialize"));
-	if (initFunc)
-	{
-		initFunc(plugin.id);
-	}
-	else
-	{
-		XQAPI::OutPutLog(("加载"s + file.filename().string() + "失败！无公开的Initialize函数!").c_str());
-		FreeLibrary(dll);
-		return 0;
-	}
-	
-	// 判断是否启用
-	fileCopy.replace_extension(".disable");
-	if (std::filesystem::exists(fileCopy))
-	{
-		plugin.enabled = false;
-	}
-	plugin.dll = dll;
-	plugins.push_back(plugin);
-	XQAPI::OutPutLog(("加载"s + file.filename().string() + "成功！").c_str());
-	
-	return 0;
-}
 
 // 获取CQ码某部分的信息
 std::string retrieveSectionData(const std::string& CQCode, const std::string& section)
@@ -627,7 +487,10 @@ void __stdcall CQXQ_init()
 			ICC_LINK_CLASS | ICC_LISTVIEW_CLASSES | ICC_NATIVEFNTCTL_CLASS | ICC_PAGESCROLLER_CLASS | ICC_PROGRESS_CLASS | ICC_STANDARD_CLASSES |
 			ICC_TAB_CLASSES | ICC_TREEVIEW_CLASSES | ICC_UPDOWN_CLASS | ICC_USEREX_CLASSES;
 		InitCommonControlsEx(&ex);
+		ExceptionWrapper(InitGUI)();
 	}).wait();
+
+	fakeMainThread.push([](int) { ExceptionWrapper(MsgLoop)(); });
 
 	// 载入配置
 	filesystem::path p(rootPath);
@@ -679,23 +542,11 @@ void __stdcall CQXQ_init()
 	// 创建必要文件夹
 	std::filesystem::create_directories(rootPath + "\\data\\image\\");
 	std::filesystem::create_directories(rootPath + "\\data\\record\\");
+	std::filesystem::remove_all(rootPath + "\\CQPlugins\\tmp\\");
+	std::filesystem::create_directories(rootPath + "\\CQPlugins\\tmp\\");
 
 	// 加载CQ插件
-	std::string ppath = rootPath + "\\CQPlugins\\";
-	std::filesystem::create_directories(ppath);
-	for (const auto& file : std::filesystem::directory_iterator(ppath))
-	{
-		if (file.is_regular_file() && file.path().extension() == ".dll")
-		{
-			loadCQPlugin(file);
-		}
-	}
-
-	// 按照优先级排序
-	for (auto& ele : plugins_events)
-	{
-		std::sort(ele.second.begin(), ele.second.end());
-	}
+	loadAllCQPlugin();
 
 	// 延迟字符串内存释放
 	memFreeThread = std::make_unique<std::thread>([]
@@ -733,17 +584,29 @@ void __stdcall CQXQ_init()
 			memFreeQueue.pop();
 		}
 	});
-
-	
-	fakeMainThread.push([](int)
-	{
-		ExceptionWrapper(InitGUI)();
-	}).wait();
-	 
-	fakeMainThread.push([](int) { ExceptionWrapper(MsgLoop)(); });
-	
+	Init = true;
 }
 
+#ifdef XQ
+CQAPI(void, XQ_AuthId, 8)(int ID, int IMAddr)
+{
+	AuthCode = new unsigned char[16];
+	*((int*)AuthCode) = 1;
+	*((int*)(AuthCode + 4)) = 8;
+	*((int*)(AuthCode + 8)) = ID;
+	*((int*)(AuthCode + 12)) = IMAddr;
+	AuthCode += 8;
+}
+CQAPI(void, XQ_AutoId, 8)(int ID, int IMAddr)
+{
+	AuthCode = new unsigned char[16];
+	*((int*)AuthCode) = 1;
+	*((int*)(AuthCode + 4)) = 8;
+	*((int*)(AuthCode + 8)) = ID;
+	*((int*)(AuthCode + 12)) = IMAddr;
+	AuthCode += 8;
+}
+#endif
 
 #ifdef XQ
 CQAPI(const char*, XQ_Create, 4)(const char* ver)
@@ -751,11 +614,10 @@ CQAPI(const char*, XQ_Create, 4)(const char* ver)
 CQAPI(const char*, OQ_Create, 0)()
 #endif
 {
-	ExceptionWrapper(CQXQ_init)();
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.0.11\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.1.0beta\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
-	return "插件名称{CQOQ}\r\n插件版本{1.0.11}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
+	return "插件名称{CQOQ}\r\n插件版本{1.1.0beta}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
 }
 
@@ -763,8 +625,9 @@ void __stdcall CQXQ_Uninit()
 {
 	for (auto& plugin : plugins)
 	{
-		FreeLibrary(plugin.dll);
+		FreeLibrary(plugin.second.dll);
 	}
+	filesystem::remove_all(rootPath + "\\CQPlugins\\tmp\\");
 	FreeLibrary(XQHModule);
 	FreeLibrary(CQPHModule);
 	running = false;
@@ -790,6 +653,11 @@ void __stdcall CQXQ_Uninit()
 	}).wait();
 	fakeMainThread.stop();
 	p.stop();
+	if (AuthCode)
+	{
+		AuthCode -= 8;
+		delete[] AuthCode;
+	}
 }
 
 #ifdef XQ
@@ -808,7 +676,7 @@ CQAPI(int32_t, XQ_SetUp, 0)()
 CQAPI(int32_t, OQ_SetUp, 0)()
 #endif
 {
-	ExceptionWrapper(ShowMainWindowAsync)();
+	ExceptionWrapper(ShowMainWindow)();
 	return 0;
 }
 
@@ -842,15 +710,12 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 	if (!botQQStr.empty() && robotQQ != atoll(botQQ)) return 0;
 	if (msgType == XQ_Load)
 	{
-		for (const auto& plugin : plugins_events[CQ_eventStartup])
-		{
-			const auto startup = IntMethod(plugin.event);
-			if (startup)
-			{
-				fakeMainThread.push([&startup](int) { ExceptionWrapper(startup)(); }).wait();
-			}
-		}
+		p.push([](int) { ExceptionWrapper(CQXQ_init)(); });
 		return 0;
+	}
+	while (!Init)
+	{
+		this_thread::sleep_for(100ms);
 	}
 	if (msgType == XQ_Exit)
 	{
@@ -936,7 +801,6 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 			const auto invited = EvRequestAddGroup(plugin.event);
 			if (invited)
 			{
-
 				if (invited(2, atoi(timeStamp), atoll(sourceId), atoll(activeQQ), msg, data.c_str())) break;
 			}
 		}

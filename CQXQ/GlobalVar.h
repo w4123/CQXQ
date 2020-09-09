@@ -18,36 +18,48 @@ struct eventType
 	{
 		return this->priority < that.priority;
 	}
+	bool operator==(const eventType& that) const
+	{
+		return this->event == that.event;
+	}
 };
 
 struct native_plugin
 {
-	int id;
+	int id = -1;
 	std::string file;
+	std::string newFile;
 	std::string name;
 	std::string version;
-	int version_id;
+	int version_id = -1;
 	std::string author;
 	std::string description;
 	std::map<int, eventType> events;
 	std::vector<std::pair<std::string, FARPROC>> menus;
-	HMODULE dll;
-	bool enabled;
+	HMODULE dll = nullptr;
+	bool enabled = false;
 
-	native_plugin(int i, const std::string& f)
+	native_plugin(int i, const std::string& f, const std::string& nf)
 	{
 		id = i;
 		file = f;
+		newFile = nf;
 		dll = nullptr;
 		enabled = true;
 	}
+
+	native_plugin() = default;
+	~native_plugin() = default;
 };
 
 // 存储所有插件
-extern std::vector<native_plugin> plugins;
+extern std::map<int, native_plugin> plugins;
 
 // 存储排序后的所有插件事件
 extern std::map<int, std::vector<eventType>> plugins_events;
+
+// 下一个插件的id
+extern int nextPluginId;
 
 // XQ根目录, 结尾不带斜杠
 extern std::string rootPath;
@@ -68,3 +80,5 @@ extern ctpl::thread_pool fakeMainThread;
 extern ctpl::thread_pool p;
 
 extern std::atomic<long long> robotQQ;
+
+extern unsigned char* AuthCode;

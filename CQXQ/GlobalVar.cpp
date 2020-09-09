@@ -11,10 +11,13 @@
 HMODULE hDllModule;
 
 // 所有插件
-std::vector<native_plugin> plugins;
+std::map<int, native_plugin> plugins;
 
 // 排序后的所有插件事件
 std::map<int, std::vector<eventType>> plugins_events;
+
+// 下一个插件的ID
+int nextPluginId = 1;
 
 // XQ根目录, 结尾不带斜杠
 std::string rootPath;
@@ -35,3 +38,5 @@ ctpl::thread_pool fakeMainThread(1);
 ctpl::thread_pool p(4);
 
 std::atomic<long long> robotQQ;
+
+unsigned char* AuthCode = nullptr;

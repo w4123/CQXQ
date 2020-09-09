@@ -189,6 +189,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="CQPluginLoader.h" />
     <ClInclude Include="CQTools.h" />
     <ClInclude Include="ctpl_stl.h" />
     <ClInclude Include="EncodingConvert.h" />
@@ -203,6 +204,7 @@
     <ClInclude Include="XQAPI.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="CQPluginLoader.cpp" />
     <ClCompile Include="CQTools.cpp" />
     <ClCompile Include="EncodingConvert.cpp" />
     <ClCompile Include="ErrorHandler.cpp" />
