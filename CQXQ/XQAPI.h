@@ -47,7 +47,7 @@ namespace XQAPI
     });
 
 #else
-void initFuncs(const HMODULE& hModule);
+	void initFuncs(const HMODULE& hModule);
 #define XQAPI(Name, ReturnType, ...) template <typename... Args> \
 	ReturnType Name (Args&&... args);
 
@@ -57,8 +57,22 @@ void initFuncs(const HMODULE& hModule);
 
 	XQAPI(SendMsgEX, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon)
 
-	// 特殊 -> 单独创建线程
+#ifdef ASYNC_MSG
+
 #ifdef XQAPI_IMPLEMENTATION
+	const char* SendMsgEX_V2(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json)
+	{
+		SendMsgEX(botQQ, msgType, groupId, QQ, content, bubbleId, isAnon);
+		return "FORCESUC";
+	}
+#else
+	const char* SendMsgEX_V2(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json);
+#endif
+
+#else
+
+#ifdef XQAPI_IMPLEMENTATION
+	// 特殊 -> 单独创建线程
 	using SendMsgEX_V2_FUNC = std::function<const char*(__stdcall)(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json)>; \
 	SendMsgEX_V2_FUNC _SendMsgEX_V2; 
 	using SendMsgEX_V2_TYPE = const char*(__stdcall*)(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json); \
@@ -107,6 +121,8 @@ void initFuncs(const HMODULE& hModule);
 #else
 	template <typename... Args>
 	const char* SendMsgEX_V2(Args&&... args);
+#endif
+
 #endif
 
 	XQAPI(OutPutLog, void, const char* content)
