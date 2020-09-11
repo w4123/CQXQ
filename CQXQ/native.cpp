@@ -1246,6 +1246,11 @@ CQAPI(int32_t, CQ_sendGroupMsg, 16)(int32_t plugin_id, int64_t group, const char
 {
 	if (robotQQ == 0) return -1;
 	if (!msg) return -1;
+	if (XQAPI::IsShutUp(std::to_string(robotQQ).c_str(), std::to_string(group).c_str(), std::to_string(robotQQ).c_str()) ||
+		XQAPI::IsShutUp(std::to_string(robotQQ).c_str(), std::to_string(group).c_str(), ""))
+	{
+		return -1;
+	}
 
 	// 匿名判断
 	BOOL isAnon = FALSE;

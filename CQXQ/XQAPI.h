@@ -57,7 +57,57 @@ void initFuncs(const HMODULE& hModule);
 
 	XQAPI(SendMsgEX, void, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon)
 
-	XQAPI(SendMsgEX_V2, const char*, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json)
+	// 特殊 -> 单独创建线程
+#ifdef XQAPI_IMPLEMENTATION
+	using SendMsgEX_V2_FUNC = std::function<const char*(__stdcall)(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json)>; \
+	SendMsgEX_V2_FUNC _SendMsgEX_V2; 
+	using SendMsgEX_V2_TYPE = const char*(__stdcall*)(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json); \
+	struct SendMsgEX_V2_Struct
+	{
+		const char* botQQ;
+		int32_t msgType;
+		const char* groupId;
+		const char* QQ;
+		const char* content;
+		int32_t bubbleId;
+		BOOL isAnon;
+		const char* json;
+		const char* ret;
+	};
+	DWORD WINAPI SendMsgEX_V2_ThreadProc(
+		_In_ LPVOID lpParameter
+	)
+	{
+		SendMsgEX_V2_Struct* para = (SendMsgEX_V2_Struct*)lpParameter;
+		para->ret = _SendMsgEX_V2(para->botQQ, para->msgType, para->groupId, para->QQ, para->content, para->bubbleId, para->isAnon, para->json);
+		return 0;
+	}
+	template <typename... Args>
+	const char* SendMsgEX_V2(Args&&... args)
+	{ 
+		SendMsgEX_V2_Struct para = { args..., nullptr };
+		HANDLE t = CreateThread(nullptr, 0, SendMsgEX_V2_ThreadProc, (void*)(&para), 0, nullptr);
+		// 保险措施 -> 30秒后强制终止
+		if (WaitForSingleObject(t, 30000) == WAIT_OBJECT_0)
+		{
+			CloseHandle(t);
+			return para.ret;
+		}
+		else
+		{
+			TerminateThread(t, 0);
+			CloseHandle(t);
+			return "";
+		}
+	} 
+    static bool _init_SendMsgEX_V2 = addFuncInit( [] (const auto& hModule) { 
+        _SendMsgEX_V2 = reinterpret_cast<SendMsgEX_V2_TYPE>(GetProcAddress(hModule, "Api_SendMsgEX_V2"));
+        if (!_SendMsgEX_V2) throw std::exception("Unable to initialize API Function SendMsgEX_V2"); 
+    });
+#else
+	template <typename... Args>
+	const char* SendMsgEX_V2(Args&&... args);
+#endif
 
 	XQAPI(OutPutLog, void, const char* content)
 
@@ -128,6 +178,8 @@ void initFuncs(const HMODULE& hModule);
 	XQAPI(ShakeWindow, BOOL, const char* botQQ, const char* QQ)
 
 	XQAPI(GetAnon, BOOL, const char* botQQ, const char* groupId)
+
+	XQAPI(IsShutUp, BOOL, const char* botQQ, const char* groupId, const char* QQ)
 
 	//XQAPI(GetAge, int32_t, const char* botQQ, const char* QQ)
 
