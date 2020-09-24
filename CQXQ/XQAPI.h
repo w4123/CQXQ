@@ -1,11 +1,15 @@
 #include <vector>
+#include <exception>
+#include <stdexcept>
+#include <string>
 #include <functional>
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include "ErrorHandler.h"
 #include "GlobalVar.h"
 
 using namespace std;
+
+#define ASYNC_MSG
 
 namespace XQAPI
 {
@@ -33,23 +37,35 @@ namespace XQAPI
 		}
 	}
 
-#define XQAPI(Name, ReturnType, ...) using Name##_FUNC = std::function<ReturnType (__stdcall)(__VA_ARGS__)>; \
+#define XQAPI(Name, ReturnType, ...) using Name##_FUNC = std::function<ReturnType (unsigned char *, __VA_ARGS__)>; \
 	Name##_FUNC _##Name; \
-	using Name##_TYPE = ReturnType (__stdcall*)(__VA_ARGS__); \
+	using Name##_TYPE = ReturnType (__stdcall*)(unsigned char *, __VA_ARGS__); \
 	template <typename... Args> \
-	ReturnType Name (Args&&... args) \
+	ReturnType Name(Args&&... args) \
 	{ \
-		return p.push([&args...](int iThread){ return _##Name(std::forward<Args>(args)...); }).get(); \
+		if constexpr (std::is_same_v<const char*, ReturnType>) \
+		{ \
+			const char* ret = p.push([&args...](int iThread){ return _##Name(AuthCode, std::forward<Args>(args)...); }).get(); \
+			if (!ret) return ""; \
+			size_t size = *reinterpret_cast<size_t*>(const_cast<char*>(ret)); \
+			std::string retStr(ret + 4, size); \
+			HeapFree(GetProcessHeap(), 0, reinterpret_cast<void*>(const_cast<char*>(ret))); \
+			return delayMemFreeCStr(retStr); \
+		} \
+		else \
+		{ \
+			return p.push([&args...](int iThread){ return _##Name(AuthCode, std::forward<Args>(args)...); }).get(); \
+		} \
 	} \
-    static bool _init_##Name = addFuncInit( [] (const auto& hModule) { \
-        _##Name = reinterpret_cast<Name##_TYPE>(GetProcAddress(hModule, "Api_" #Name)); \
-        if (!_##Name) throw std::exception("Unable to initialize API Function " #Name); \
+    static bool _init_##Name = addFuncInit( [] (const auto& hModule) -> void { \
+        _##Name = reinterpret_cast<Name##_TYPE>(GetProcAddress(hModule, "S3_Api_" #Name)); \
+        if (!_##Name) throw std::runtime_error("Unable to initialize API Function " #Name); \
     });
 
 #else
 	void initFuncs(const HMODULE& hModule);
 #define XQAPI(Name, ReturnType, ...) template <typename... Args> \
-	ReturnType Name (Args&&... args);
+	ReturnType Name (Args&&... args); \
 
 #endif
 
@@ -72,10 +88,10 @@ namespace XQAPI
 #else
 
 #ifdef XQAPI_IMPLEMENTATION
-	// 特殊 -> 单独创建线程
-	using SendMsgEX_V2_FUNC = std::function<const char*(__stdcall)(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json)>; \
+	// 鐗规畩 -> 鍗曠嫭鍒涘缓绾跨▼
+	using SendMsgEX_V2_FUNC = std::function<const char*(__stdcall)(unsigned char*, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json)>; \
 	SendMsgEX_V2_FUNC _SendMsgEX_V2; 
-	using SendMsgEX_V2_TYPE = const char*(__stdcall*)(const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json); \
+	using SendMsgEX_V2_TYPE = const char*(__stdcall*)(unsigned char*, const char* botQQ, int32_t msgType, const char* groupId, const char* QQ, const char* content, int32_t bubbleId, BOOL isAnon, const char* json); \
 	struct SendMsgEX_V2_Struct
 	{
 		const char* botQQ;
@@ -93,7 +109,7 @@ namespace XQAPI
 	)
 	{
 		SendMsgEX_V2_Struct* para = (SendMsgEX_V2_Struct*)lpParameter;
-		para->ret = _SendMsgEX_V2(para->botQQ, para->msgType, para->groupId, para->QQ, para->content, para->bubbleId, para->isAnon, para->json);
+		para->ret = _SendMsgEX_V2(AuthCode, para->botQQ, para->msgType, para->groupId, para->QQ, para->content, para->bubbleId, para->isAnon, para->json);
 		return 0;
 	}
 	template <typename... Args>
@@ -101,11 +117,15 @@ namespace XQAPI
 	{ 
 		SendMsgEX_V2_Struct para = { args..., nullptr };
 		HANDLE t = CreateThread(nullptr, 0, SendMsgEX_V2_ThreadProc, (void*)(&para), 0, nullptr);
-		// 保险措施 -> 30秒后强制终止
+		// 淇濋櫓鎺柦 -> 30绉掑悗寮哄埗缁堟
 		if (WaitForSingleObject(t, 30000) == WAIT_OBJECT_0)
 		{
 			CloseHandle(t);
-			return para.ret;
+			if (!para.ret) return "";
+			size_t size = *reinterpret_cast<size_t*>(const_cast<char*>(para.ret));
+			std::string retStr(para.ret + 4, size);
+			HeapFree(GetProcessHeap(), 0, reinterpret_cast<void*>(const_cast<char*>(para.ret)));
+			return delayMemFreeCStr(retStr);
 		}
 		else
 		{
@@ -115,7 +135,7 @@ namespace XQAPI
 		}
 	} 
     static bool _init_SendMsgEX_V2 = addFuncInit( [] (const auto& hModule) { 
-        _SendMsgEX_V2 = reinterpret_cast<SendMsgEX_V2_TYPE>(GetProcAddress(hModule, "Api_SendMsgEX_V2"));
+        _SendMsgEX_V2 = reinterpret_cast<SendMsgEX_V2_TYPE>(GetProcAddress(hModule, "S3_Api_SendMsgEX_V2"));
         if (!_SendMsgEX_V2) throw std::exception("Unable to initialize API Function SendMsgEX_V2"); 
     });
 #else

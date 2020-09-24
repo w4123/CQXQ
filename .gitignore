@@ -43,3 +43,5 @@ dummyCQP/x64
 /CQXQ/Resource.aps
 /CQXQ/packages/libiconv.lib.1.16.0.6
 /CQXQ/CQXQ-cppcheck-build-dir
+/build
+/CMakeFiles

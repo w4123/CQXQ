@@ -1,6 +1,6 @@
 #pragma once
 #include <filesystem>
-// °´ÕÕÓÅÏÈ¼¶ÅÅĞò
+// æŒ‰ç…§ä¼˜å…ˆçº§æ’åº
 void sortEvents();
 int loadCQPlugin(const std::filesystem::path& file, int id = -1);
 void loadOneCQPlugin(const std::filesystem::path& file, int id = -1);

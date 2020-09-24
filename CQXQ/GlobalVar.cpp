@@ -1,5 +1,4 @@
 #include "GlobalVar.h"
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <vector>
 #include <string>
@@ -10,32 +9,72 @@
 
 HMODULE hDllModule;
 
-// ËùÓĞ²å¼ş
+// æ‰€æœ‰æ’ä»¶
 std::map<int, native_plugin> plugins;
 
-// ÅÅĞòºóµÄËùÓĞ²å¼şÊÂ¼ş
+// æ’åºåçš„æ‰€æœ‰æ’ä»¶äº‹ä»¶
 std::map<int, std::vector<eventType>> plugins_events;
 
-// ÏÂÒ»¸ö²å¼şµÄID
+// ä¸‹ä¸€ä¸ªæ’ä»¶çš„ID
 int nextPluginId = 1;
 
-// XQ¸ùÄ¿Â¼, ½áÎ²²»´øĞ±¸Ü
+// XQæ ¹ç›®å½•, ç»“å°¾ä¸å¸¦æ–œæ 
 std::string rootPath;
 
-// ÆôÓÃÊÂ¼şÊÇ·ñÒÑ¾­±»µ÷ÓÃ£¬ÓÃÓÚÔÚQQµÇÂ½³É¹¦ÒÔºóÔÙµ÷ÓÃÆôÓÃÊÂ¼ş
+// å¯ç”¨äº‹ä»¶æ˜¯å¦å·²ç»è¢«è°ƒç”¨ï¼Œç”¨äºåœ¨QQç™»é™†æˆåŠŸä»¥åå†è°ƒç”¨å¯ç”¨äº‹ä»¶
 bool EnabledEventCalled = false;
 
-// ÊÇ·ñ½ÓÊÕÀ´×Ô×Ô¼ºµÄÊÂ¼ş
+// æ˜¯å¦æ¥æ”¶æ¥è‡ªè‡ªå·±çš„äº‹ä»¶
 bool RecvSelfEvent = false;
 
-// ÊÇ·ñÔÚÔËĞĞ
+// æ˜¯å¦åœ¨è¿è¡Œ
 std::atomic<bool> running = false;
 
-// Î±Ö÷Ïß³Ì
+// ä¼ªä¸»çº¿ç¨‹
 ctpl::thread_pool fakeMainThread(1);
 
-// APIµ÷ÓÃÏß³Ì
+// APIè°ƒç”¨çº¿ç¨‹
 ctpl::thread_pool p(4);
+
+// æ€»å†…å­˜é‡Šæ”¾çº¿ç¨‹
+std::unique_ptr<std::thread> memFreeThread;
+
+// ç”¨äºé‡Šæ”¾å­—ç¬¦ä¸²å†…å­˜
+std::priority_queue<std::pair<std::time_t, void*>> memFreeQueue;
+
+std::mutex memFreeMutex;
+
+// æ¶ˆæ¯IDä»¥åŠæ¶ˆæ¯IDå†…å­˜é‡Šæ”¾
+std::priority_queue<std::pair<std::time_t, size_t>> memFreeMsgIdQueue;
+
+std::mutex memFreeMsgIdMutex;
+
+std::map<size_t, FakeMsgId> msgIdMap;
+
+std::atomic<size_t> msgIdMapId = 1;
+
+size_t newMsgId(const FakeMsgId& msgId)
+{
+	size_t id = msgIdMapId++;
+	std::unique_lock lock(memFreeMsgIdMutex);
+	msgIdMap[id] = msgId;
+	memFreeMsgIdQueue.push(std::make_pair(time(nullptr), id));
+	return id;
+}
+
+// æ˜¯å¦å·²ç»åˆå§‹åŒ–å®Œæ¯•
+std::atomic<bool> Init = false;
+
+// å¤åˆ¶å­—ç¬¦ä¸², è¿”å›å¤åˆ¶åçš„å­—ç¬¦ä¸²æŒ‡é’ˆï¼Œå­—ç¬¦ä¸²å†…å­˜5åˆ†é’Ÿåé‡Šæ”¾
+const char* delayMemFreeCStr(const std::string& str)
+{
+	const char* s = _strdup(str.c_str());
+	{
+		std::unique_lock lock(memFreeMutex);
+		memFreeQueue.push({ time(nullptr), (void*)s });
+	}
+	return s;
+}
 
 std::atomic<long long> robotQQ;
 

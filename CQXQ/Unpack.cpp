@@ -113,12 +113,12 @@ std::vector<unsigned char> Unpack::getchars() noexcept
 
 Unpack& Unpack::add(string i)
 {
-	if (i.empty()) //×Ö·û´®³¤¶ÈÎª0,Ö±½Ó·ÅÈë³¤¶È0
+	if (i.empty()) //å­—ç¬¦ä¸²é•¿åº¦ä¸º0,ç›´æ¥æ”¾å…¥é•¿åº¦0
 	{
 		add(static_cast<short>(0));
 		return *this;
 	}
-	if (i.size() > 32767) //×Ö·û´®³¤¶È³¬³öÏŞÖÆ,
+	if (i.size() > 32767) //å­—ç¬¦ä¸²é•¿åº¦è¶…å‡ºé™åˆ¶,
 	{
 		i = i.substr(0, 32767);
 	}

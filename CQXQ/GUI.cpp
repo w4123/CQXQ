@@ -1,5 +1,4 @@
 #include "GUI.h"
-#define WIN32_LEAN_AND_MEAN
 #include <cassert>
 #include <map>
 #include <string>
@@ -106,8 +105,8 @@ protected:
 	HWND m_hwnd;
 };
 
-// »ù´¡ListViewÀà
-// Ê¹ÓÃÖ®Ç°±ØĞëÏÈµ÷ÓÃInitCommonControl/InitCommonControlEx
+// åŸºç¡€ListViewç±»
+// ä½¿ç”¨ä¹‹å‰å¿…é¡»å…ˆè°ƒç”¨InitCommonControl/InitCommonControlEx
 class BasicListView
 {
 public:
@@ -152,7 +151,7 @@ public:
 		return ListView_InsertColumn(hwnd, isubItem, &lvC);
 	}
 
-	// ´ø¿í¶È
+	// å¸¦å®½åº¦
 	void AddAllTextColumn(const std::vector<std::pair<std::string, int>>& texts)
 	{
 		for (const auto& item : texts)
@@ -209,7 +208,7 @@ public:
 		ListView_SetItemText(hwnd, index, subindex, const_cast<char*>(text.c_str()));
 	}
 
-	// ³¤¶È×î³¤Îª1000
+	// é•¿åº¦æœ€é•¿ä¸º1000
 	[[nodiscard]] std::string GetItemText(int index, int subindex = 0)
 	{
 		char buffer[1000]{};
@@ -241,7 +240,7 @@ protected:
 	HWND hwnd;
 };
 
-// »ù´¡EditÀà
+// åŸºç¡€Editç±»
 class BasicEdit
 {
 public:
@@ -302,7 +301,7 @@ protected:
 	HWND hwnd;
 };
 
-// »ù´¡ButtonÀà
+// åŸºç¡€Buttonç±»
 class BasicButton
 {
 public:
@@ -351,7 +350,7 @@ protected:
 	HWND hwnd;
 };
 
-// »ù´¡StaticÀà
+// åŸºç¡€Staticç±»
 class BasicStatic
 {
 public:
@@ -454,16 +453,16 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		RECT rcClient; // The parent window's client area.
 		GetClientRect(m_hwnd, &rcClient);
 
-		// Ìí¼Ó×ÖÌå/Í¼Æ¬µÈ
+		// æ·»åŠ å­—ä½“/å›¾ç‰‡ç­‰
 		Fonts["Yahei14"] = CreateFontA(14, 0, 0, 0, FW_DONTCARE, FALSE,
 			FALSE, FALSE, GB2312_CHARSET, OUT_DEFAULT_PRECIS,
-			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE | DEFAULT_PITCH, "Î¢ÈíÑÅºÚ");
+			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE | DEFAULT_PITCH, "å¾®è½¯é›…é»‘");
 		Fonts["Yahei18"] = CreateFontA(18, 0, 0, 0, FW_DONTCARE, FALSE,
 			FALSE, FALSE, GB2312_CHARSET, OUT_DEFAULT_PRECIS,
-			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE | DEFAULT_PITCH, "Î¢ÈíÑÅºÚ");
+			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE | DEFAULT_PITCH, "å¾®è½¯é›…é»‘");
 		Fonts["Yahei22"] = CreateFontA(22, 0, 0, 0, FW_DONTCARE, FALSE,
 			FALSE, FALSE, GB2312_CHARSET, OUT_DEFAULT_PRECIS,
-			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE | DEFAULT_PITCH, "Î¢ÈíÑÅºÚ");
+			CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY, FF_DONTCARE | DEFAULT_PITCH, "å¾®è½¯é›…é»‘");
 
 		SendMessage(m_hwnd, WM_SETFONT, (WPARAM)Fonts["Yahei14"], 1);
 		CreateMainPage();
@@ -507,13 +506,13 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (SelectedIndex == -1)
 			{
-				MessageBoxA(m_hwnd, "ÇëÏÈµ¥»÷×ó²àÁĞ±íÑ¡ÔñÒ»¸ö²å¼ş!", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "è¯·å…ˆå•å‡»å·¦ä¾§åˆ—è¡¨é€‰æ‹©ä¸€ä¸ªæ’ä»¶!", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (plugins[SelectedIndex].enabled)
 			{
 				plugins[SelectedIndex].enabled = false;
-				ButtonEnable.SetText("ÆôÓÃ");
+				ButtonEnable.SetText("å¯ç”¨");
 				if (!plugins[SelectedIndex].events.count(CQ_eventDisable)) return 0;
 				const auto disable = IntMethod(plugins[SelectedIndex].events.at(CQ_eventDisable).event);
 				if (disable && EnabledEventCalled)
@@ -524,7 +523,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 				p.append("CQPlugins").append(plugins[SelectedIndex].file).replace_extension(".disable");
 				if (!std::filesystem::exists(p))
 				{
-					ofstream fstream(p); // ´´½¨ÎÄ¼ş
+					ofstream fstream(p); // åˆ›å»ºæ–‡ä»¶
 					fstream << "This file is used to disable the corresponding plugin";
 					fstream.close();
 				}
@@ -532,7 +531,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 			else
 			{
 				plugins[SelectedIndex].enabled = true;
-				ButtonEnable.SetText("Í£ÓÃ");
+				ButtonEnable.SetText("åœç”¨");
 				if (!plugins[SelectedIndex].events.count(CQ_eventEnable)) return 0;
 				const auto enable = IntMethod(plugins[SelectedIndex].events.at(CQ_eventEnable).event);
 				if (enable && EnabledEventCalled)
@@ -552,17 +551,17 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (SelectedIndex == -1)
 			{
-				MessageBoxA(m_hwnd, "ÇëÏÈµ¥»÷×ó²àÁĞ±íÑ¡ÔñÒ»¸ö²å¼ş!", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "è¯·å…ˆå•å‡»å·¦ä¾§åˆ—è¡¨é€‰æ‹©ä¸€ä¸ªæ’ä»¶!", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (!plugins[SelectedIndex].enabled)
 			{
-				MessageBoxA(m_hwnd, "²å¼şÉĞÎ´ÆôÓÃ£¬ÇëÏÈÆôÓÃ²å¼ş£¡", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "æ’ä»¶å°šæœªå¯ç”¨ï¼Œè¯·å…ˆå¯ç”¨æ’ä»¶ï¼", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (!EnabledEventCalled)
 			{
-				MessageBoxA(m_hwnd, "²å¼şÉĞÎ´³õÊ¼»¯Íê±Ï£¬µÈ´ıQQµÇÂ½Íê³Éºó²å¼ş½øĞĞ³õÊ¼»¯£¡", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "æ’ä»¶å°šæœªåˆå§‹åŒ–å®Œæ¯•ï¼Œç­‰å¾…QQç™»é™†å®Œæˆåæ’ä»¶è¿›è¡Œåˆå§‹åŒ–ï¼", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (plugins[SelectedIndex].menus.empty()) return 0;
@@ -598,12 +597,12 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (SelectedIndex == -1)
 			{
-				MessageBoxA(m_hwnd, "ÇëÏÈµ¥»÷×ó²àÁĞ±íÑ¡ÔñÒ»¸ö²å¼ş!", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "è¯·å…ˆå•å‡»å·¦ä¾§åˆ—è¡¨é€‰æ‹©ä¸€ä¸ªæ’ä»¶!", "CQXQ", MB_OK);
 				return 0;
 			}
 			if (!EnabledEventCalled)
 			{
-				MessageBoxA(m_hwnd, "²å¼şÉĞÎ´³õÊ¼»¯Íê±Ï£¬µÈ´ıQQµÇÂ½Íê³Éºó²å¼ş½øĞĞ³õÊ¼»¯£¡", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "æ’ä»¶å°šæœªåˆå§‹åŒ–å®Œæ¯•ï¼Œç­‰å¾…QQç™»é™†å®Œæˆåæ’ä»¶è¿›è¡Œåˆå§‹åŒ–ï¼", "CQXQ", MB_OK);
 				return 0;
 			}
 			reloadOneCQPlugin(SelectedIndex);
@@ -612,14 +611,14 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		case ID_MASTER_BUTTONRECVSELFMSG:
 		{
 			RecvSelfEvent = !RecvSelfEvent;
-			ButtonSwitchRecvSelfMsg.SetText(RecvSelfEvent ? "Í£Ö¹½ÓÊÕÀ´×Ô×Ô¼ºµÄÊÂ¼ş" : "¿ªÊ¼½ÓÊÕÀ´×Ô×Ô¼ºµÄÊÂ¼ş");
+			ButtonSwitchRecvSelfMsg.SetText(RecvSelfEvent ? "åœæ­¢æ¥æ”¶æ¥è‡ªè‡ªå·±çš„äº‹ä»¶" : "å¼€å§‹æ¥æ”¶æ¥è‡ªè‡ªå·±çš„äº‹ä»¶");
 			std::filesystem::path p(rootPath);
 			p.append("CQPlugins").append(".cqxq_recv_self_event.enable");
 			if (RecvSelfEvent)
 			{
 				if (!std::filesystem::exists(p))
 				{
-					ofstream fstream(p); // ´´½¨ÎÄ¼ş
+					ofstream fstream(p); // åˆ›å»ºæ–‡ä»¶
 					fstream << "This file is used to enable CQXQ to receive message from the robot itself";
 					fstream.close();
 				}
@@ -647,7 +646,7 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 		{
 			if (!EnabledEventCalled)
 			{
-				MessageBoxA(m_hwnd, "²å¼şÉĞÎ´³õÊ¼»¯Íê±Ï£¬µÈ´ıQQµÇÂ½Íê³Éºó²å¼ş½øĞĞ³õÊ¼»¯£¡", "CQXQ", MB_OK);
+				MessageBoxA(m_hwnd, "æ’ä»¶å°šæœªåˆå§‹åŒ–å®Œæ¯•ï¼Œç­‰å¾…QQç™»é™†å®Œæˆåæ’ä»¶è¿›è¡Œåˆå§‹åŒ–ï¼", "CQXQ", MB_OK);
 				return 0;
 			}
 			reloadAllCQPlugin();
@@ -673,11 +672,11 @@ LRESULT GUI::HandleMessage(UINT uMsg, WPARAM wParam, LPARAM lParam)
 					StaticDesc.SetText(plugins[SelectedIndex].description);
 					if (plugins[SelectedIndex].enabled)
 					{
-						ButtonEnable.SetText("Í£ÓÃ");
+						ButtonEnable.SetText("åœç”¨");
 					}
 					else
 					{
-						ButtonEnable.SetText("ÆôÓÃ");
+						ButtonEnable.SetText("å¯ç”¨");
 					}
 				}
 				return 0;
@@ -698,22 +697,22 @@ LRESULT GUI::CreateMainPage()
 	RECT rcClient;
 	GetClientRect(m_hwnd, &rcClient);
 
-	ButtonEnable.Create("ÆôÓÃ", WS_CHILD | WS_VISIBLE, 0,
+	ButtonEnable.Create("å¯ç”¨", WS_CHILD | WS_VISIBLE, 0,
 		400, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONENABLE));
-	ButtonReload.Create("ÖØÔØ", WS_CHILD | WS_VISIBLE, 0,
+	ButtonReload.Create("é‡è½½", WS_CHILD | WS_VISIBLE, 0,
 		500, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRELOAD));
-	ButtonMenu.Create("²Ëµ¥", WS_CHILD | WS_VISIBLE, 0,
+	ButtonMenu.Create("èœå•", WS_CHILD | WS_VISIBLE, 0,
 		600, 280, 70, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONMENU));
-	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "Í£Ö¹½ÓÊÕÀ´×Ô×Ô¼ºµÄÊÂ¼ş" : "¿ªÊ¼½ÓÊÕÀ´×Ô×Ô¼ºµÄÊÂ¼ş", WS_CHILD | WS_VISIBLE, 0,
+	ButtonSwitchRecvSelfMsg.Create(RecvSelfEvent ? "åœæ­¢æ¥æ”¶æ¥è‡ªè‡ªå·±çš„äº‹ä»¶" : "å¼€å§‹æ¥æ”¶æ¥è‡ªè‡ªå·±çš„äº‹ä»¶", WS_CHILD | WS_VISIBLE, 0,
 		400, 320, 270, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRECVSELFMSG));
-	ButtonReloadAll.Create("È«²¿ÖØÔØ", WS_CHILD | WS_VISIBLE, 0,
+	ButtonReloadAll.Create("å…¨éƒ¨é‡è½½", WS_CHILD | WS_VISIBLE, 0,
 		12, 430, 90, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONRELOADALL));
-	ButtonGitHub.Create("²é¿´Ô´Âë", WS_CHILD | WS_VISIBLE, 0,
+	ButtonGitHub.Create("æŸ¥çœ‹æºç ", WS_CHILD | WS_VISIBLE, 0,
 		144, 430, 90, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONGITHUB));
-	ButtonAddGroup.Create("¼Ó¿ª·¢Èº", WS_CHILD | WS_VISIBLE, 0,
+	ButtonAddGroup.Create("åŠ å¼€å‘ç¾¤", WS_CHILD | WS_VISIBLE, 0,
 		277, 430, 90, 30, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_BUTTONADDGROUP));
 
-	StaticDesc.Create("µ¥»÷×ó²àÁĞ±íÑ¡ÔñÒ»¸ö²å¼ş",
+	StaticDesc.Create("å•å‡»å·¦ä¾§åˆ—è¡¨é€‰æ‹©ä¸€ä¸ªæ’ä»¶",
 		WS_CHILD | WS_VISIBLE, 0,
 		400, 30, 270, 200, m_hwnd, reinterpret_cast<HMENU>(ID_MASTER_STATICDESC));
 
@@ -726,7 +725,7 @@ LRESULT GUI::CreateMainPage()
 		reinterpret_cast<HMENU>(ID_MASTER_LVPLUGIN));
 	ListViewPlugin.SetExtendedListViewStyle(LVS_EX_DOUBLEBUFFER | LVS_EX_AUTOSIZECOLUMNS | LVS_EX_FULLROWSELECT);
 
-	ListViewPlugin.AddAllTextColumn(std::vector<std::pair<std::string, int>>{ {"ID", 50}, { "Ãû³Æ", 300 }, { "×÷Õß", 200 }, { "°æ±¾", 200 }});
+	ListViewPlugin.AddAllTextColumn(std::vector<std::pair<std::string, int>>{ {"ID", 50}, { "åç§°", 300 }, { "ä½œè€…", 200 }, { "ç‰ˆæœ¬", 200 }});
 	int index = 0;
 	for (const auto& item : plugins)
 	{
@@ -751,10 +750,10 @@ GUI MainWindow;
 
 int __stdcall InitGUI()
 {
-	// hDllModule²»Ó¦Îª¿Õ
+	// hDllModuleä¸åº”ä¸ºç©º
 	assert(hDllModule);
 
-	// ³õÊ¼»¯CommonControl
+	// åˆå§‹åŒ–CommonControl
 	INITCOMMONCONTROLSEX icex; // Structure for control initialization.
 	icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
 	icex.dwICC = ICC_STANDARD_CLASSES | ICC_LISTVIEW_CLASSES;
@@ -779,9 +778,9 @@ LRESULT GUI::UpdateGUI()
 		ListViewPlugin.AddTextRow({ std::to_string(item.second.id), item.second.name, item.second.author, item.second.version }, index);
 		index++;
 	}
-	StaticDesc.SetText("µ¥»÷×ó²àÁĞ±íÑ¡ÔñÒ»¸ö²å¼ş");
+	StaticDesc.SetText("å•å‡»å·¦ä¾§åˆ—è¡¨é€‰æ‹©ä¸€ä¸ªæ’ä»¶");
 	SelectedIndex = -1;
-	ButtonEnable.SetText("ÆôÓÃ");
+	ButtonEnable.SetText("å¯ç”¨");
 	return 0;
 }
 

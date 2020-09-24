@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <cstring>
 #include "iconv.h"
 
 template <typename T, typename Q>
@@ -12,7 +13,7 @@ std::basic_string<T> ConvertEncoding(const std::basic_string<Q>& in, const std::
 	}
 	size_t in_len = in.size() * sizeof(Q);
 	size_t out_len = size_t(in_len * CapFac + sizeof(T));
-	const char* in_ptr = reinterpret_cast<const char*> (in.c_str());
+	char* in_ptr = const_cast<char*>(reinterpret_cast<const char*> (in.c_str()));
 	char* out_ptr = new char[out_len]();
 
 	// As out_ptr would be modified by iconv(), store a copy of it pointing to the beginning of the array

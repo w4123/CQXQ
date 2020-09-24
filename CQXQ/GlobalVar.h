@@ -1,5 +1,4 @@
 #pragma once
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <vector>
 #include <string>
@@ -52,32 +51,68 @@ struct native_plugin
 	~native_plugin() = default;
 };
 
-// ´æ´¢ËùÓĞ²å¼ş
+// å­˜XQæ¶ˆæ¯ID
+struct FakeMsgId
+{
+	int type; //1å¥½å‹, 2ç¾¤èŠ, 4ç¾¤ä¸´æ—¶ä¼šè¯
+	long long sourceId; // å‚è€ƒæ¥æºï¼šç¾¤/è®¨è®ºç»„å·, å¥½å‹ä¸º-1
+	long long QQ; // å‚è€ƒæ¥æº: QQå·, éç§èŠæ¶ˆæ¯ä¸º-1
+	long long msgNum;
+	long long msgId;
+	long long msgTime; // ç¾¤æ¶ˆæ¯å…¶å®ä¸éœ€è¦è¿™ä¸ª
+};
+
+// å­˜å‚¨æ‰€æœ‰æ’ä»¶
 extern std::map<int, native_plugin> plugins;
 
-// ´æ´¢ÅÅĞòºóµÄËùÓĞ²å¼şÊÂ¼ş
+// å­˜å‚¨æ’åºåçš„æ‰€æœ‰æ’ä»¶äº‹ä»¶
 extern std::map<int, std::vector<eventType>> plugins_events;
 
-// ÏÂÒ»¸ö²å¼şµÄid
+// ä¸‹ä¸€ä¸ªæ’ä»¶çš„id
 extern int nextPluginId;
 
-// XQ¸ùÄ¿Â¼, ½áÎ²²»´øĞ±¸Ü
+// XQæ ¹ç›®å½•, ç»“å°¾ä¸å¸¦æ–œæ 
 extern std::string rootPath;
 
-// ÆôÓÃÊÂ¼şÊÇ·ñÒÑ¾­±»µ÷ÓÃ£¬ÓÃÓÚÔÚQQµÇÂ½³É¹¦ÒÔºóÔÙµ÷ÓÃÆôÓÃÊÂ¼ş
+// å¯ç”¨äº‹ä»¶æ˜¯å¦å·²ç»è¢«è°ƒç”¨ï¼Œç”¨äºåœ¨QQç™»é™†æˆåŠŸä»¥åå†è°ƒç”¨å¯ç”¨äº‹ä»¶
 extern bool EnabledEventCalled;
 
-// ÊÇ·ñ½ÓÊÕÀ´×Ô×Ô¼ºµÄÊÂ¼ş
+// æ˜¯å¦æ¥æ”¶æ¥è‡ªè‡ªå·±çš„äº‹ä»¶
 extern bool RecvSelfEvent;
 
-// ÊÇ·ñÔÚÔËĞĞ
+// æ˜¯å¦åœ¨è¿è¡Œ
 extern std::atomic<bool> running;
 
-// Î±Ö÷Ïß³Ì
+// ä¼ªä¸»çº¿ç¨‹
 extern ctpl::thread_pool fakeMainThread;
 
-// APIµ÷ÓÃÏß³Ì
+// APIè°ƒç”¨çº¿ç¨‹
 extern ctpl::thread_pool p;
+
+// æ€»å†…å­˜é‡Šæ”¾çº¿ç¨‹
+extern std::unique_ptr<std::thread> memFreeThread;
+
+// ç”¨äºé‡Šæ”¾å­—ç¬¦ä¸²å†…å­˜
+extern std::priority_queue<std::pair<std::time_t, void*>> memFreeQueue;
+
+extern std::mutex memFreeMutex;
+
+// æ¶ˆæ¯IDä»¥åŠæ¶ˆæ¯IDå†…å­˜é‡Šæ”¾
+extern std::priority_queue<std::pair<std::time_t, size_t>> memFreeMsgIdQueue;
+
+extern std::mutex memFreeMsgIdMutex;
+
+extern std::map<size_t, FakeMsgId> msgIdMap;
+
+extern std::atomic<size_t> msgIdMapId;
+
+size_t newMsgId(const FakeMsgId& msgId);
+
+// æ˜¯å¦å·²ç»åˆå§‹åŒ–å®Œæ¯•
+extern std::atomic<bool> Init;
+
+// å¤åˆ¶å­—ç¬¦ä¸², è¿”å›å¤åˆ¶åçš„å­—ç¬¦ä¸²æŒ‡é’ˆï¼Œå­—ç¬¦ä¸²å†…å­˜5åˆ†é’Ÿåé‡Šæ”¾
+const char* delayMemFreeCStr(const std::string& str);
 
 extern std::atomic<long long> robotQQ;
 

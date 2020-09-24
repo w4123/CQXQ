@@ -1,16 +1,15 @@
 #include <filesystem>
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <sstream>
 #include <fstream>
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 #include "EncodingConvert.h"
 #include "XQAPI.h"
 #include "GlobalVar.h"
 #include "native.h"
 #include "GUI.h"
 
-// °´ÕÕÓÅÏÈ¼¶ÅÅĞò
+// æŒ‰ç…§ä¼˜å…ˆçº§æ’åº
 void sortEvents()
 {
 	for (auto& ele : plugins_events)
@@ -28,7 +27,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 	filesystem::copy_file(file, newFile, ec);
 	if (ec)
 	{
-		XQAPI::OutPutLog(("¼ÓÔØ"s + file.filename().string() + "Ê§°Ü£¡ÎŞ·¨¸´ÖÆDLLÎÄ¼ş!").c_str());
+		XQAPI::OutPutLog(("åŠ è½½"s + file.filename().string() + "å¤±è´¥ï¼æ— æ³•å¤åˆ¶DLLæ–‡ä»¶!").c_str());
 		return ec.value();
 	}
 	native_plugin plugin = { (id == -1) ? nextPluginId++ : id, file.filename().string(), newFile };
@@ -45,10 +44,10 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 	if (!dll)
 	{
 		int err = GetLastError();
-		XQAPI::OutPutLog(("¼ÓÔØ"s + file.filename().string() + "Ê§°Ü£¡LoadLibrary´íÎó´úÂë£º" + std::to_string(err)).c_str());
+		XQAPI::OutPutLog(("åŠ è½½"s + file.filename().string() + "å¤±è´¥ï¼LoadLibraryé”™è¯¯ä»£ç ï¼š" + std::to_string(err)).c_str());
 		return err;
 	}
-	// ¶ÁÈ¡Json
+	// è¯»å–Json
 	auto fileCopy = file;
 	fileCopy.replace_extension(".json");
 	ifstream jsonstream(fileCopy);
@@ -97,7 +96,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 				}
 				else
 				{
-					XQAPI::OutPutLog(("¼ÓÔØ" + file.filename().string() + "µÄÊÂ¼şÀàĞÍ" + std::to_string(type) + "Ê±Ê§°Ü! Çë¼ì²éjsonÎÄ¼şÊÇ·ñÕıÈ·!").c_str());
+					XQAPI::OutPutLog(("åŠ è½½" + file.filename().string() + "çš„äº‹ä»¶ç±»å‹" + std::to_string(type) + "æ—¶å¤±è´¥! è¯·æ£€æŸ¥jsonæ–‡ä»¶æ˜¯å¦æ­£ç¡®!").c_str());
 				}
 			}
 			for (const auto& it : j["menu"])
@@ -117,7 +116,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 				}
 				else
 				{
-					XQAPI::OutPutLog(("¼ÓÔØ" + file.filename().string() + "µÄ²Ëµ¥" + UTF8toGB18030(it["name"].get<std::string>()) + "Ê±Ê§°Ü! Çë¼ì²éjsonÎÄ¼şÊÇ·ñÕıÈ·!").c_str());
+					XQAPI::OutPutLog(("åŠ è½½" + file.filename().string() + "çš„èœå•" + UTF8toGB18030(it["name"].get<std::string>()) + "æ—¶å¤±è´¥! è¯·æ£€æŸ¥jsonæ–‡ä»¶æ˜¯å¦æ­£ç¡®!").c_str());
 				}
 
 			}
@@ -125,7 +124,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 		}
 		catch (std::exception& e)
 		{
-			XQAPI::OutPutLog(("¼ÓÔØ"s + file.filename().string() + "Ê§°Ü£¡JsonÎÄ¼ş¶ÁÈ¡Ê§°Ü! " + e.what()).c_str());
+			XQAPI::OutPutLog(("åŠ è½½"s + file.filename().string() + "å¤±è´¥ï¼Jsonæ–‡ä»¶è¯»å–å¤±è´¥! " + e.what()).c_str());
 			if (this_thread::get_id() == fakeMainThread.get_thread(0).get_id())
 			{
 				FreeLibrary(dll);
@@ -139,7 +138,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 	}
 	else
 	{
-		XQAPI::OutPutLog(("¼ÓÔØ"s + file.filename().string() + "Ê§°Ü£¡ÎŞ·¨´ò¿ªJsonÎÄ¼ş!").c_str());
+		XQAPI::OutPutLog(("åŠ è½½"s + file.filename().string() + "å¤±è´¥ï¼æ— æ³•æ‰“å¼€Jsonæ–‡ä»¶!").c_str());
 		if (this_thread::get_id() == fakeMainThread.get_thread(0).get_id())
 		{
 			FreeLibrary(dll);
@@ -157,7 +156,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 	}
 	else
 	{
-		XQAPI::OutPutLog(("¼ÓÔØ"s + file.filename().string() + "Ê§°Ü£¡ÎŞ¹«¿ªµÄInitializeº¯Êı!").c_str());
+		XQAPI::OutPutLog(("åŠ è½½"s + file.filename().string() + "å¤±è´¥ï¼æ— å…¬å¼€çš„Initializeå‡½æ•°!").c_str());
 		if (this_thread::get_id() == fakeMainThread.get_thread(0).get_id())
 		{
 			FreeLibrary(dll);
@@ -169,7 +168,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 		return 0;
 	}
 
-	// ÅĞ¶ÏÊÇ·ñÆôÓÃ
+	// åˆ¤æ–­æ˜¯å¦å¯ç”¨
 	fileCopy.replace_extension(".disable");
 	if (std::filesystem::exists(fileCopy))
 	{
@@ -177,7 +176,7 @@ int loadCQPlugin(const std::filesystem::path& file, int id = -1)
 	}
 	plugin.dll = dll;
 	plugins.insert({ plugin.id, plugin });
-	XQAPI::OutPutLog(("¼ÓÔØ"s + file.filename().string() + "³É¹¦£¡").c_str());
+	XQAPI::OutPutLog(("åŠ è½½"s + file.filename().string() + "æˆåŠŸï¼").c_str());
 	if (plugin.events.count(CQ_eventStartup))
 	{
 		const auto startup = IntMethod(plugin.events[CQ_eventStartup].event);

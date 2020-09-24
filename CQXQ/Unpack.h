@@ -3,7 +3,7 @@
 #include <vector>
 #include <string>
 
-//´òÓ¡ÄÚ´æÊı¾İ
+//æ‰“å°å†…å­˜æ•°æ®
 static void show(void* t, const int len)
 {
 	auto* const p = static_cast<unsigned char*>(t);
@@ -16,7 +16,7 @@ static void show(void* t, const int len)
 	std::cout << "}" << std::endl;
 }
 
-//ÄÚ´æ·­×ª
+//å†…å­˜ç¿»è½¬
 static unsigned char* Flip(unsigned char* const str, int len) noexcept
 {
 	auto f = 0;
@@ -32,8 +32,8 @@ static unsigned char* Flip(unsigned char* const str, int len) noexcept
 	return str;
 }
 
-//µ½×Ö½Ú¼¯...
-//ÔÚÔ­ÓĞµÄÊı¾İ»ù´¡ÉÏ²Ù×÷
+//åˆ°å­—èŠ‚é›†...
+//åœ¨åŸæœ‰çš„æ•°æ®åŸºç¡€ä¸Šæ“ä½œ
 template <typename ClassType>
 unsigned char* toBin(ClassType& i) noexcept
 {
@@ -54,25 +54,25 @@ public:
 	Unpack& clear() noexcept;
 	[[nodiscard]] int len() const noexcept;
 
-	Unpack& add(int i); //Ìí¼ÓÒ»¸öÕûÊı
-	int getInt() noexcept; //µ¯³öÒ»¸öÕûÊı
+	Unpack& add(int i); //æ·»åŠ ä¸€ä¸ªæ•´æ•°
+	int getInt() noexcept; //å¼¹å‡ºä¸€ä¸ªæ•´æ•°
 
-	Unpack& add(long long i); //Ìí¼ÓÒ»¸ö³¤ÕûÊı
-	long long getLong() noexcept; //µ¯³öÒ»¸ö³¤ÕûÊı
+	Unpack& add(long long i); //æ·»åŠ ä¸€ä¸ªé•¿æ•´æ•°
+	long long getLong() noexcept; //å¼¹å‡ºä¸€ä¸ªé•¿æ•´æ•°
 
-	Unpack& add(short i); //Ìí¼ÓÒ»¸ö¶ÌÕûÊı
-	short getshort() noexcept; //µ¯³öÒ»¸ö¶ÌÕûÊı
+	Unpack& add(short i); //æ·»åŠ ä¸€ä¸ªçŸ­æ•´æ•°
+	short getshort() noexcept; //å¼¹å‡ºä¸€ä¸ªçŸ­æ•´æ•°
 
-	Unpack& add(const unsigned char* i, short len); //Ìí¼ÓÒ»¸ö×Ö½Ú¼¯(ÇëÓÃadd(std::string i);)
-	std::vector<unsigned char> getchars() noexcept; //µ¯³öÒ»¸ö×Ö½Ú¼¯(ÇëÓÃgetstring();)
+	Unpack& add(const unsigned char* i, short len); //æ·»åŠ ä¸€ä¸ªå­—èŠ‚é›†(è¯·ç”¨add(std::string i);)
+	std::vector<unsigned char> getchars() noexcept; //å¼¹å‡ºä¸€ä¸ªå­—èŠ‚é›†(è¯·ç”¨getstring();)
 
-	Unpack& add(std::string i); //Ìí¼ÓÒ»¸ö×Ö·û´®
-	std::string getstring(); //µ¯³öÒ»¸ö×Ö·û´®
+	Unpack& add(std::string i); //æ·»åŠ ä¸€ä¸ªå­—ç¬¦ä¸²
+	std::string getstring(); //å¼¹å‡ºä¸€ä¸ªå­—ç¬¦ä¸²
 
-	Unpack& add(Unpack& i); //Ìí¼ÓÒ»¸öUnpack
-	Unpack getUnpack() noexcept; //µ¯³öÒ»¸öUnpack
+	Unpack& add(Unpack& i); //æ·»åŠ ä¸€ä¸ªUnpack
+	Unpack getUnpack() noexcept; //å¼¹å‡ºä¸€ä¸ªUnpack
 
-	std::string getAll() noexcept; //·µ»Ø±¾°üÊı¾İ
+	std::string getAll() noexcept; //è¿”å›æœ¬åŒ…æ•°æ®
 
 	void show();
 };

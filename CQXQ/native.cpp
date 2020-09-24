@@ -1,4 +1,4 @@
-﻿#include <vector>
+#include <vector>
 #include <string>
 #include <Windows.h>
 #include <thread>
@@ -12,7 +12,7 @@
 #include "GlobalVar.h"
 #include "native.h"
 #include "CQTools.h"
-#include "json.hpp"
+#include "nlohmann/json.hpp"
 #include "ctpl_stl.h"
 #include "Unpack.h"
 #include "GlobalVar.h"
@@ -25,6 +25,7 @@
 #include "CQPluginLoader.h"
 #include <CommCtrl.h>
 #include <DbgHelp.h>
+#include <combaseapi.h>
 
 #pragma comment(lib, "urlmon.lib")
 
@@ -35,57 +36,6 @@
 using namespace std;
 
 #define XQ
-
-// 存XQ消息ID
-struct FakeMsgId
-{
-	int type; //1好友, 2群聊, 4群临时会话
-	long long sourceId; // 参考来源：群/讨论组号, 好友为-1
-	long long QQ; // 参考来源: QQ号, 非私聊消息为-1
-	long long msgNum;
-	long long msgId;
-	long long msgTime; // 群消息其实不需要这个
-};
-
-// 用于释放字符串内存
-std::priority_queue<std::pair<std::time_t, void*>> memFreeQueue;
-
-std::mutex memFreeMutex;
-
-// 消息ID以及消息ID内存释放
-std::priority_queue<std::pair<std::time_t, size_t>> memFreeMsgIdQueue;
-
-std::mutex memFreeMsgIdMutex;
-
-std::map<size_t, FakeMsgId> msgIdMap;
-
-std::atomic<size_t> msgIdMapId = 1;
-
-size_t newMsgId(const FakeMsgId& msgId)
-{
-	size_t id = msgIdMapId++;
-	std::unique_lock lock(memFreeMsgIdMutex);
-	msgIdMap[id] = msgId;
-	memFreeMsgIdQueue.push(make_pair(time(nullptr), id));
-	return id;
-}
-
-// 总内存释放线程
-std::unique_ptr<std::thread> memFreeThread;
-
-// 是否已经初始化完毕
-std::atomic<bool> Init = false;
-
-// 复制字符串, 返回复制后的字符串指针，字符串内存5分钟后释放
-const char* delayMemFreeCStr(const std::string& str)
-{
-	const char* s = _strdup(str.c_str());
-	{
-		std::unique_lock lock(memFreeMutex);
-		memFreeQueue.push({ time(nullptr), (void*)s });
-	}
-	return s;
-}
 
 class Cominit
 {
@@ -615,7 +565,7 @@ CQAPI(const char*, OQ_Create, 0)()
 #endif
 {
 #ifdef XQ
-	return "{\"name\":\"CQXQ\", \"pver\":\"1.1.0beta\", \"sver\":1, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
+	return "{\"name\":\"CQXQ\", \"pver\":\"1.1.0beta\", \"sver\":3, \"author\":\"Suhui\", \"desc\":\"A simple compatibility layer between CQ and XQ\"}";
 #else
 	return "插件名称{CQOQ}\r\n插件版本{1.1.0beta}\r\n插件作者{Suhui}\r\n插件说明{A simple compatibility layer between CQ and OQ}\r\n插件skey{8956RTEWDFG3216598WERDF3}\r\n插件sdk{S3}";
 #endif
@@ -731,45 +681,52 @@ int __stdcall CQXQ_process(const char* botQQ, int32_t msgType, int32_t subType, 
 	}
 	if (msgType == XQ_Enable)
 	{
-		const char* onlineList = XQAPI::GetOnLineList();
-		std::string onlineListStr = onlineList ? onlineList : "";
-
-		if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
+		fakeMainThread.push([](int)
 		{
-			if (robotQQ == 0)
+			this_thread::sleep_for(1s);
+			const char* onlineList = XQAPI::GetOnLineList();
+			std::string onlineListStr = onlineList ? onlineList : "";
+
+			if (!onlineListStr.empty() && !(onlineListStr[0] == '\r' || onlineListStr[0] == '\n') && !EnabledEventCalled)
 			{
-				robotQQ = atoll(onlineList);
-			}
-			// 先返回此函数，让先驱认为插件已经开启再调用插件的启用函数
-			fakeMainThread.push([](int) { this_thread::sleep_for(3s); });
-			for (const auto& plugin : plugins_events[CQ_eventEnable])
-			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto enable = IntMethod(plugin.event);
-				if (enable)
+				if (robotQQ == 0)
 				{
-					fakeMainThread.push([enable](int) { ExceptionWrapper(enable)(); });
+					robotQQ = atoll(onlineList);
 				}
+				// 先返回此函数，让先驱认为插件已经开启再调用插件的启用函数
+
+				for (const auto& plugin : plugins_events[CQ_eventEnable])
+				{
+					if (!plugins[plugin.plugin_id].enabled) continue;
+					const auto enable = IntMethod(plugin.event);
+					if (enable)
+					{
+						ExceptionWrapper(enable)();
+					}
+				}
+				EnabledEventCalled = true;
 			}
-			fakeMainThread.push([](int) { EnabledEventCalled = true; });
-		}
+		});
+	
 		return 0;
 	}
 	if (msgType == XQ_LogInComplete)
 	{
-		if (!EnabledEventCalled && XQAPI::IsEnable())
-		{
-			for (const auto& plugin : plugins_events[CQ_eventEnable])
+		fakeMainThread.push([](int) {
+			if (!EnabledEventCalled && XQAPI::IsEnable())
 			{
-				if (!plugins[plugin.plugin_id].enabled) continue;
-				const auto enable = IntMethod(plugin.event);
-				if (enable)
+				for (const auto& plugin : plugins_events[CQ_eventEnable])
 				{
-					fakeMainThread.push([&enable](int) { ExceptionWrapper(enable)(); }).wait();
+					if (!plugins[plugin.plugin_id].enabled) continue;
+					const auto enable = IntMethod(plugin.event);
+					if (enable)
+					{
+						ExceptionWrapper(enable)();
+					}
 				}
+				EnabledEventCalled = true;
 			}
-			EnabledEventCalled = true;
-		}
+		});
 		return 0;
 	}
 	if (msgType == XQ_Disable)
@@ -1492,7 +1449,7 @@ CQAPI(const char*, CQ_getGroupInfo, 16)(int32_t plugin_id, int64_t group, BOOL d
 	{
 		if (memberListStr.empty())
 		{
-			throw std::exception("GetGroupMemberList Failed");
+			throw std::runtime_error("GetGroupMemberList Failed");
 		}
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		std::string groupStr = std::to_string(group);
@@ -1619,7 +1576,7 @@ CQAPI(const char*, CQ_getGroupMemberInfoV2, 24)(int32_t plugin_id, int64_t group
 		std::string accStr = std::to_string(account);
 		if (memberListStr.empty())
 		{
-			throw std::exception("GetGroupMemberList Failed");
+			throw std::runtime_error("GetGroupMemberList Failed");
 		}
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
 		long long owner = j["owner"].get<long long>();
@@ -1717,7 +1674,7 @@ CQAPI(const char*, CQ_getGroupMemberList, 12)(int32_t plugin_id, int64_t group)
 	{
 		if (memberListStr.empty())
 		{
-			throw std::exception("GetGroupMemberList Failed");
+			throw std::runtime_error("GetGroupMemberList Failed");
 		}
 		Unpack p;
 		nlohmann::json j = nlohmann::json::parse(memberListStr);
@@ -2017,10 +1974,5 @@ CQAPI(int32_t, CQ_setGroupAddRequest, 16)(int32_t plugin_id, const char* id, int
 CQAPI(int32_t, CQ_sendLike, 12)(int32_t plugin_id, int64_t account)
 {
 	return CQ_sendLikeV2(plugin_id, account, 1);
-}
-
-CQAPI(int32_t, isCQXQ, 0)()
-{
-	return 1;
 }
 

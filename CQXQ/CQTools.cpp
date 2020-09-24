@@ -1,14 +1,11 @@
 #include "CQTools.h"
 
 #include <string>
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-
 #define CP_GBK 936
 
 using namespace std;
 
-//´úÂëÀ´Ô´ÓÚÍøÂç
+//ä»£ç æ¥æºäºç½‘ç»œ
 static const string base64_chars =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	"abcdefghijklmnopqrstuvwxyz"

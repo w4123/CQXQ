@@ -1,17 +1,16 @@
-#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <string>
 #include <Psapi.h>
 #include <sstream>
 #include <DbgHelp.h>
-#include <CommCtrl.h>
+#include <commctrl.h>
 #include <iomanip>
 #include "EncodingConvert.h"
 #include <mutex>
 #include "CQPluginLoader.h"
 using namespace std;
 
-// ´íÎó´¦Àí
+// é”™è¯¯å¤„ç†
 #pragma comment(lib,"Dbghelp.lib")
 
 
@@ -217,7 +216,7 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 {
 	std::unique_lock lock(HandlerMutex);
 
-	// µ÷ÊÔÓÃ-¼ÓÔØ·ûºÅ
+	// è°ƒè¯•ç”¨-åŠ è½½ç¬¦å·
 	SymInitialize(GetCurrentProcess(), NULL, TRUE);
 	SymSetOptions(SYMOPT_LOAD_LINES);
 
@@ -232,9 +231,9 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	config.hInstance = nullptr;
 	config.dwFlags = TDF_EXPAND_FOOTER_AREA | TDF_SIZE_TO_CONTENT | TDF_USE_COMMAND_LINKS;
 	config.dwCommonButtons = 0;
-	config.pszWindowTitle = L"CQXQ ´íÎó´¦Àí";
+	config.pszWindowTitle = L"CQXQ é”™è¯¯å¤„ç†";
 	config.pszMainIcon = TD_ERROR_ICON;
-	config.pszMainInstruction = L"CQXQ ÔËĞĞÖĞÓöµ½´íÎó, Õâ¿ÉÄÜÊÇCQXQ±¾Éí»òÊÇÄ³¸ö²å¼şµ¼ÖÂµÄ";
+	config.pszMainInstruction = L"CQXQ è¿è¡Œä¸­é‡åˆ°é”™è¯¯, è¿™å¯èƒ½æ˜¯CQXQæœ¬èº«æˆ–æ˜¯æŸä¸ªæ’ä»¶å¯¼è‡´çš„";
 
 	std::wstring expInfo = GB18030toUTF16(expInformation(ExceptionInfo, true, ExceptionInfo->ExceptionRecord->ExceptionCode));
 	config.pszContent = expInfo.c_str();
@@ -249,13 +248,13 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	constexpr int EXIT_BUTTON = 104;
 
 	buttons[0].nButtonID = IGNORE_BUTTON;
-	buttons[0].pszButtonText = L"ºöÂÔ\nCQXQ½«ºöÂÔ´ËÒì³£, µ«ÊÇÓ¦ÓÃ³ÌĞò¿ÉÄÜ±íÏÖÒì³£";
+	buttons[0].pszButtonText = L"å¿½ç•¥\nCQXQå°†å¿½ç•¥æ­¤å¼‚å¸¸, ä½†æ˜¯åº”ç”¨ç¨‹åºå¯èƒ½è¡¨ç°å¼‚å¸¸";
 	buttons[1].nButtonID = RELOAD_BUTTON;
-	buttons[1].pszButtonText = L"ÖØÔØ\nCQXQ½«ÖØÔØËùÓĞ²å¼ş";
+	buttons[1].pszButtonText = L"é‡è½½\nCQXQå°†é‡è½½æ‰€æœ‰æ’ä»¶";
 	buttons[2].nButtonID = RELOAD_EXCEPT_ERROR_BUTTON;
-	buttons[2].pszButtonText = L"ÖØÔØ(½ûÓÃ³ö´íÓ¦ÓÃ)\nCQXQ½«ÖØÔØËùÓĞ²å¼ş, µ«½«½ûÓÃ³ö´íÓ¦ÓÃ(±ğµãÕâ¸ö»¹Ã»Ğ´Íê)";
+	buttons[2].pszButtonText = L"é‡è½½(ç¦ç”¨å‡ºé”™åº”ç”¨)\nCQXQå°†é‡è½½æ‰€æœ‰æ’ä»¶, ä½†å°†ç¦ç”¨å‡ºé”™åº”ç”¨(åˆ«ç‚¹è¿™ä¸ªè¿˜æ²¡å†™å®Œ)";
 	buttons[3].nButtonID = EXIT_BUTTON;
-	buttons[3].pszButtonText = L"ÍË³ö\n³ÌĞò½«»áÍË³ö";
+	buttons[3].pszButtonText = L"é€€å‡º\nç¨‹åºå°†ä¼šé€€å‡º";
 
 	config.pButtons = buttons;
 	config.nDefaultButton = IGNORE_BUTTON;
@@ -265,8 +264,8 @@ LONG WINAPI CQXQUnhandledExceptionFilter(
 	config.pszVerificationText = nullptr;
 	std::wstring stkInfo = GB18030toUTF16(formatStack(ExceptionInfo->ContextRecord));
 	config.pszExpandedInformation = stkInfo.c_str();
-	config.pszExpandedControlText = L"Òş²Ø";
-	config.pszCollapsedControlText = L"ÏêÏ¸ĞÅÏ¢";
+	config.pszExpandedControlText = L"éšè—";
+	config.pszCollapsedControlText = L"è¯¦ç»†ä¿¡æ¯";
 	config.pszFooterIcon = nullptr;
 	config.pszFooter = nullptr;
 	config.pfCallback = nullptr;
