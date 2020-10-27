@@ -9,8 +9,6 @@
 
 using namespace std;
 
-#define ASYNC_MSG
-
 namespace XQAPI
 {
 

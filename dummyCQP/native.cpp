@@ -201,6 +201,11 @@ XQAPI(int32_t, CQ_sendLike, 12, int32_t plugin_id, int64_t account)
 	return _CQ_sendLike(plugin_id, account);
 }
 
+XQAPI(int32_t, CQ_reload, 4, int32_t plugin_id)
+{
+	return _CQ_reload(plugin_id);
+}
+
 XQAPI(int32_t, isCQXQ, 0)
 {
 	return 1;
@@ -255,6 +260,7 @@ BOOL APIENTRY DllMain(HMODULE hModule,
 		_CQ_getCookies = (CQ_getCookies_TYPE)GetProcAddress(XQHModule, "CQ_getCookies");
 		_CQ_setGroupAddRequest = (CQ_setGroupAddRequest_TYPE)GetProcAddress(XQHModule, "CQ_setGroupAddRequest");
 		_CQ_sendLike = (CQ_sendLike_TYPE)GetProcAddress(XQHModule, "CQ_sendLike");
+		_CQ_reload = (CQ_reload_TYPE)GetProcAddress(XQHModule, "CQ_reload");
 		break;
 	default:
 		break;

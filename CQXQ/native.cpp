@@ -1976,3 +1976,9 @@ CQAPI(int32_t, CQ_sendLike, 12)(int32_t plugin_id, int64_t account)
 	return CQ_sendLikeV2(plugin_id, account, 1);
 }
 
+CQAPI(int32_t, CQ_reload, 4)(int32_t plugin_id)
+{
+	reloadOneCQPlugin(plugin_id);
+	return 0;
+}
+
