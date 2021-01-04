@@ -1,6 +1,2 @@
 libiconv
-openssl
-zlib
 nlohmann-json
-boost-asio
-boost-beast

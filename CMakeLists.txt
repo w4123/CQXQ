@@ -29,23 +29,14 @@ string(STRIP "${APP_ID}" APP_ID)
 set(APP_ID "\"${APP_ID}\"")
 add_compile_definitions(APP_ID=${APP_ID})
 
-
-find_package(SQLiteCpp CONFIG REQUIRED)
-find_package(unofficial-sqlite3 CONFIG REQUIRED)
-find_package(cpprestsdk CONFIG REQUIRED)
-find_package(unofficial-brotli CONFIG REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(ZLIB REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(unofficial-iconv CONFIG REQUIRED)
+find_package(Iconv REQUIRED)
 
 file(GLOB_RECURSE SOURCE_FILES CQXQ/*.cpp CQXQ/*.rc)
 set(LIB_NAME "CQXQ.XQ")
 add_library(${LIB_NAME} SHARED ${SOURCE_FILES})
 
-target_link_libraries(${LIB_NAME} PRIVATE ZLIB::ZLIB)
-target_link_libraries(${LIB_NAME} PRIVATE OpenSSL::SSL OpenSSL::Crypto)
-target_link_libraries(${LIB_NAME} PRIVATE unofficial::iconv::libiconv unofficial::iconv::libcharset)
+target_link_libraries(${LIB_NAME} PRIVATE Iconv::Iconv)
 target_link_libraries(${LIB_NAME} PRIVATE nlohmann_json nlohmann_json::nlohmann_json)
 
 cotire(${LIB_NAME})
